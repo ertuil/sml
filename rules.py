@@ -186,13 +186,11 @@ class NetRule(Rule):
                         net_stat[f"{iface}-ipv4"] = addr.address
                     if addr.family == socket.AF_INET6:
                         net_stat[f"{iface}-ipv6"] = addr.address
-
+        
         # first count
         old_stat = {}
         net_io = psutil.net_io_counters(pernic=True, nowrap=True)
         for iface, result in net_io.items():
-            if iface not in self.count_ifaces:
-                continue
             old_stat[f"{iface}-send-byte"] = result.bytes_sent
             old_stat[f"{iface}-send-packet"] = result.packets_sent
             old_stat[f"{iface}-recv-byte"] = result.bytes_recv
@@ -202,8 +200,6 @@ class NetRule(Rule):
 
         net_io = psutil.net_io_counters(pernic=True, nowrap=True)
         for iface, result in net_io.items():
-            if iface not in self.count_ifaces:
-                continue
             net_stat[f"{iface}-send-bps"] = (result.bytes_sent - old_stat[f"{iface}-send-byte"])/self.interval
             net_stat[f"{iface}-recv-bps"] = (result.bytes_recv - old_stat[f"{iface}-recv-byte"])/self.interval
             net_stat[f"{iface}-send-pps"] = (result.packets_sent - old_stat[f"{iface}-send-packet"])/self.interval

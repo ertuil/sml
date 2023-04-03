@@ -4,6 +4,7 @@ import time
 import socket
 import traceback
 import pySMART
+import platform
 from utils import _bps_value, _byte_value, _percent_value, get_current_time
 from config import cpu_load_warn, cpu_load_critical, cpu_interval, mem_load_warn, mem_load_critical,\
                 disk_load_warn, disk_load_critical, disk_filter,\
@@ -78,10 +79,14 @@ class MemRule(Rule):
         virtual_mem = psutil.virtual_memory()
         mem_total = _byte_value(virtual_mem.total)
         mem_used = _byte_value(virtual_mem.used)
-        mem_free = _byte_value(
-            virtual_mem.free + virtual_mem.buffers + virtual_mem.cached)
+        mem_free = _byte_value(virtual_mem.available)
+
         mem_usage = virtual_mem.percent / 100
-        return {"total": mem_total, "used": mem_used, "free": mem_free, "usage": mem_usage}
+        mem_stat = {"total": mem_total, "used": mem_used, "free": mem_free, "usage": mem_usage}
+        if platform.system() == "Linux":
+            mem_stat["buffer"] = virtual_mem.buffers
+            mem_stat["cache"] = virtual_mem.cached
+        return mem_stat
 
     def warn(self, stat: dict):
         if self.mem_load_warn is None:

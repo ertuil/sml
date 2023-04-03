@@ -279,10 +279,10 @@ class TempRule(Rule):
                 if self.temp_critical_percent is not None and\
                    temp.current >= temp.critical * self.temp_critical_percent:
                     warn_msgs.append(f"[{self.name}-{label}] critical: {temp.current} \
-(>= {temp.critical * self.temp_critical_percent}, critical temp: {temp.critical})")
+(>= {temp.critical * self.temp_critical_percent}, crit. temp.: {temp.critical})")
                 elif temp.current >= temp.critical * self.temp_warn_percent:
                     warn_msgs.append(f"[{self.name}-{label}] warning: {temp.current} \
-(>= {temp.critical * self.temp_warn_percent}, critical temp: {temp.critical})")
+(>= {temp.critical * self.temp_warn_percent}, crit. temp.: {temp.critical})")
 
             if "coretemp" in label or "cpu" in label or "Package id" in label or "Core" in label:
                 if self.temp_cpu_critical is not None and temp.current >= self.temp_cpu_critical:

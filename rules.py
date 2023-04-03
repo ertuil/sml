@@ -228,10 +228,13 @@ class NetRule(Rule):
         if net_io is None:
             return net_stat
         for iface, result in net_io.items():
-            net_stat[f"{iface}-send-bps"] = (result.bytes_sent - old_stat[f"{iface}-send-byte"])/self.interval
-            net_stat[f"{iface}-recv-bps"] = (result.bytes_recv - old_stat[f"{iface}-recv-byte"])/self.interval
-            net_stat[f"{iface}-send-pps"] = (result.packets_sent - old_stat[f"{iface}-send-packet"])/self.interval
-            net_stat[f"{iface}-recv-pps"] = (result.packets_recv - old_stat[f"{iface}-recv-packet"])/self.interval
+            try:
+                net_stat[f"{iface}-send-bps"] = (result.bytes_sent - old_stat[f"{iface}-send-byte"])/self.interval
+                net_stat[f"{iface}-recv-bps"] = (result.bytes_recv - old_stat[f"{iface}-recv-byte"])/self.interval
+                net_stat[f"{iface}-send-pps"] = (result.packets_sent - old_stat[f"{iface}-send-packet"])/self.interval
+                net_stat[f"{iface}-recv-pps"] = (result.packets_recv - old_stat[f"{iface}-recv-packet"])/self.interval
+            except KeyError:
+                continue
 
         return net_stat
 
@@ -239,10 +242,13 @@ class NetRule(Rule):
         warn_msgs = []
 
         for iface in self.count_ifaces:
-            send_bps = net_stat[f"{iface}-send-bps"]
-            recv_bps = net_stat[f"{iface}-recv-bps"]
-            send_pps = net_stat[f"{iface}-send-pps"]
-            recv_pps = net_stat[f"{iface}-recv-pps"]
+            try:
+                send_bps = net_stat[f"{iface}-send-bps"]
+                recv_bps = net_stat[f"{iface}-recv-bps"]
+                send_pps = net_stat[f"{iface}-send-pps"]
+                recv_pps = net_stat[f"{iface}-recv-pps"]
+            except KeyError:
+                continue
 
             if self.net_bps_critical is not None and send_bps >= self.net_bps_critical:
                 warn_msgs.append(f"[{self.name}-{iface}] send critical: {_bps_value(send_bps)} \

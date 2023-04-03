@@ -164,7 +164,7 @@ class DiskRule(Rule):
             elif usage >= self.disk_load_warn:
                 warn_msgs.append(f"[{self.name}-{device_name}] warning: {_percent_value(usage)} \
 (>= {_percent_value(self.disk_load_warn)}, {used}/{total})")
-                                 
+
             # check smart
             smart_result = stat.get(f"{device_name}-SMART", None)
             if smart_result and "EMPTY" not in smart_result and "PASS" not in smart_result:

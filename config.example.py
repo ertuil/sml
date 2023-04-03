@@ -39,7 +39,8 @@ listen_map = []
 
 # ===== notify settings =====
 log_file = 'sml.log'
-log_interval = 0  # in days
+log_interval = 7  # in days
+log_reserve = 26  # about 6 months
 
 mail_from = ""
 mail_password = ""

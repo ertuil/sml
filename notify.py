@@ -6,7 +6,7 @@ from smtplib import SMTP_SSL, SMTP
 import requests
 
 from config import mail_from, mail_password, mail_tls, mail_smtp, mail_to,\
-                   tg_server, tg_secret
+                   tg_server, tg_secret, log_interval, log_reserve
 
 
 class Notifier():
@@ -23,12 +23,18 @@ class LogNotifier(Notifier):
     def __init__(self, name: str = "log", host: str = "", debug: bool = False, log_file: str = ""):
         super().__init__(name=name, host=host, debug=debug)
         self.log_file = log_file
+        self.log_interval = log_interval
+        self.log_reserve = log_reserve if log_reserve is None or log_reserve <= 0 else 1
 
         logger = logging.getLogger(f"sml-{name}")
         if debug:
             logger.setLevel(logging.DEBUG)
         if self.log_file is None or self.log_file == "":
             fh = logging.StreamHandler()
+        elif self.log_interval is not None and self.log_interval > 0:
+            from logging import handlers
+            fh = handlers.TimedRotatingFileHandler(self.log_file, when="D", interval=self.log_interval,
+                                                   backupCount=self.log_reserve, encoding="utf-8")
         else:
             fh = logging.FileHandler(log_file, "a", encoding="utf-8")
         LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"

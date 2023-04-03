@@ -3,8 +3,8 @@ import psutil
 import time
 import socket
 import traceback
+import pySMART
 from utils import _bps_value, _byte_value, _percent_value, get_current_time
-
 from config import cpu_load_warn, cpu_load_critical, cpu_interval, mem_load_warn, mem_load_critical,\
                 disk_load_warn, disk_load_critical, disk_filter,\
                 net_send_warn, net_send_packet_warn, net_recv_warn, net_recv_packet_warn,\
@@ -125,6 +125,14 @@ class DiskRule(Rule):
                 disk_stat[f"{disk.device}-used"] = disk_used
                 disk_stat[f"{disk.device}-free"] = disk_free
                 disk_stat[f"{disk.device}-usage"] = disk_percent
+
+                try:
+                    d = pySMART.Device(disk.device)
+                    disk_stat[f"{disk.device}-SMART"] = d.assessment
+                    if len(d.tests) > 0:
+                        disk_stat[f"{disk.device}-SMART-test"] = d.tests[0].status
+                except Exception as e:
+                    print("[warning] failed to do S.M.A.R.T examination", e)
                 counted_device.append(disk.device)
         return disk_stat
 
@@ -151,6 +159,16 @@ class DiskRule(Rule):
             elif usage >= self.disk_load_warn:
                 warn_msgs.append(f"[{self.name}-{device_name}] warning: {_percent_value(usage)} \
 (>= {_percent_value(self.disk_load_warn)}, {used}/{total})")
+                                 
+            # check smart
+            smart_result = stat.get(f"{device_name}-SMART", None)
+            if smart_result and "EMPTY" not in smart_result and "PASS" not in smart_result:
+                warn_msgs.append(f"[{self.name}-{device_name}] critical: SMART {smart_result}")
+
+            smart_log_result = stat.get(f"{device_name}-SMART-test", None)
+            if smart_log_result and "without error" not in smart_log_result:
+                warn_msgs.append(f"[{self.name}-{device_name}] critical: SMART test{smart_log_result}")
+
         return warn_msgs
 
 
@@ -186,7 +204,7 @@ class NetRule(Rule):
                         net_stat[f"{iface}-ipv4"] = addr.address
                     if addr.family == socket.AF_INET6:
                         net_stat[f"{iface}-ipv6"] = addr.address
-        
+
         # first count
         old_stat = {}
         net_io = psutil.net_io_counters(pernic=True, nowrap=True)

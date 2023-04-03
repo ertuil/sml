@@ -137,7 +137,7 @@ class DiskRule(Rule):
                     if len(d.tests) > 0:
                         disk_stat[f"{disk.device}-SMART-test"] = d.tests[0].status
                 except Exception as e:
-                    print("[warning] failed to do S.M.A.R.T examination", e)
+                    print("[warning] S.M.A.R.T exam not executed", e)
                 counted_device.append(disk.device)
         return disk_stat
 
@@ -196,6 +196,7 @@ class NetRule(Rule):
         net_stat = {}
 
         self.count_ifaces.clear()
+        psutil.net_io_counters.cache_clear()
 
         net_addr = psutil.net_if_addrs()
         for iface, addr_list in net_addr.items():
@@ -213,6 +214,8 @@ class NetRule(Rule):
         # first count
         old_stat = {}
         net_io = psutil.net_io_counters(pernic=True, nowrap=True)
+        if net_io is None:
+            return net_stat
         for iface, result in net_io.items():
             old_stat[f"{iface}-send-byte"] = result.bytes_sent
             old_stat[f"{iface}-send-packet"] = result.packets_sent
@@ -222,6 +225,8 @@ class NetRule(Rule):
         time.sleep(self.interval)
 
         net_io = psutil.net_io_counters(pernic=True, nowrap=True)
+        if net_io is None:
+            return net_stat
         for iface, result in net_io.items():
             net_stat[f"{iface}-send-bps"] = (result.bytes_sent - old_stat[f"{iface}-send-byte"])/self.interval
             net_stat[f"{iface}-recv-bps"] = (result.bytes_recv - old_stat[f"{iface}-recv-byte"])/self.interval

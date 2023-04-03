@@ -1,6 +1,7 @@
 # ===== global settings =====
 debug = True
 host = "localhost"
+interval = 0  # in seconds
 
 # ===== monitor settings =====
 cpu_load_warn = 0.7
@@ -38,6 +39,7 @@ listen_map = []
 
 # ===== notify settings =====
 log_file = 'sml.log'
+log_interval = 0  # in days
 
 mail_from = ""
 mail_password = ""

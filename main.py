@@ -1,11 +1,11 @@
 import platform
 import traceback
-from config import host, debug, log_file, mail_from, tg_server
+from config import host, debug, log_file, mail_from, tg_server, interval
 from rules import CPURule, MemRule, DiskRule, NetRule, ListenRule, TempRule, get_current_time
 from notify import LogNotifier, MailNotifier, TgNotifier
 
 
-def main():
+def fire():
     all_rules = [
         CPURule("cpu", debug),
         MemRule("mem", debug),
@@ -29,6 +29,37 @@ def main():
             traceback.print_exc(e)
             all_warning.insert(0, f"[{r.name}] critical: {e}")
 
+    return current_time, all_warning, all_states
+
+
+def service():
+    notifiers = init_notifiers()
+
+    def warp_single(notifiers=None):
+        print(f"start sml at {get_current_time()}")
+        single(notifiers)
+        timer = threading.Timer(interval=interval, function=warp_single, args=[notifiers])
+        timer.start()
+
+    def warp_bye():
+        print("exit sml")
+
+    import threading
+    import atexit
+    timer = threading.Timer(interval=interval, function=warp_single, args=[notifiers])
+    timer.start()
+    atexit.register(warp_bye)
+
+
+def single(notifiers=None):
+    if notifiers is None:
+        notifiers = init_notifiers()
+    current_time, all_warning, all_states = fire()
+    for n in notifiers:
+        n.emit(current_time, all_warning, all_states)
+
+
+def init_notifiers():
     notifiers = [LogNotifier(name="stdio", host=host, debug=debug, log_file="")]
     if log_file is not None and log_file != "":
         notifiers.append(LogNotifier(debug=debug, host=host, log_file=log_file))
@@ -37,10 +68,11 @@ def main():
         notifiers.append(MailNotifier(debug=debug, host=host))
     if tg_server is not None and tg_server != "":
         notifiers.append(TgNotifier(debug=debug, host=host))
-
-    for n in notifiers:
-        n.emit(current_time, all_warning, all_states)
+    return notifiers
 
 
 if __name__ == "__main__":
-    main()
+    if interval is not None and interval > 0:
+        service()
+    else:
+        single()

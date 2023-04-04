@@ -247,7 +247,8 @@ class DiskRule(Rule):
                 disk_stat[f"{disk_name}-iops"] = 0
 
             if platform.system() == "Linux":
-                disk_stat[f"{disk_name}-time"] = disk_new[disk_name].busy_time
+                disk_stat[f"{disk_name}-time"] = (disk_new[disk_name].busy_time - disk_old[disk_name].busy_time)\
+                    / (self.disk_interval * 1000)
             else:
                 disk_stat[f"{disk_name}-time"] = 0
 
@@ -294,13 +295,13 @@ class DiskRule(Rule):
                 warn_msgs.append(f"[{self.name}-{disk_name}] warn: write {_byte_value(disk_write)} \
 (>= {_byte_value(self.disk_write_warn)})")
 
-            # read delay
+            # busy time percent
             if self.disk_io_time_critical is not None and disk_time > self.disk_io_time_critical:
-                warn_msgs.append(f"[{self.name}-{disk_name}] critical: io {disk_time} ms \
-(>= {self.disk_io_time_critical} ms)")
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: io {_percent_value(disk_time)} ms \
+(>= {_percent_value(self.disk_io_time_critical)} ms)")
             elif self.disk_io_time_warn is not None and disk_time > self.disk_io_time_warn:
-                warn_msgs.append(f"[{self.name}-{disk_name}] warn: io {disk_time} ms \
-(>= {disk_io_time_warn} ms)")
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: io {_percent_value(disk_time)} ms \
+(>= {_percent_value(self.disk_io_time_warn)} ms)")
 
             # iops 
             if self.disk_iops_critical is not None and disk_iops > self.disk_iops_critical:

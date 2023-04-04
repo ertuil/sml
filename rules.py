@@ -197,14 +197,16 @@ class FSRule(Rule):
 class DiskRule(Rule):
     def __init__(self, name: str = "disk", debug: bool = False):
         super().__init__(name, debug)
+        self.disk_multipler = 1024 * 1024
+
         self.disk_iops_critical = disk_iops_critical
         self.disk_iops_warn = disk_iops_warn
         self.disk_io_time_warn = disk_io_time_warn
         self.disk_io_time_critical = disk_io_time_critical
-        self.disk_write_warn = disk_write_warn
-        self.disk_write_critical = disk_write_critical
-        self.disk_read_warn = disk_read_warn
-        self.disk_read_critical = disk_read_critical
+        self.disk_write_warn = disk_write_warn * self.disk_multipler
+        self.disk_write_critical = disk_write_critical * self.disk_multipler
+        self.disk_read_warn = disk_read_warn * self.disk_multipler
+        self.disk_read_critical = disk_read_critical * self.disk_multipler
         self.disk_filter = disk_filter
         self.disk_interval = disk_interval
         self.existed_disks = []

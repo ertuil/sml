@@ -1,9 +1,10 @@
 import logging
-from typing import List
+from typing import Dict, List
 from email.mime.text import MIMEText
 from email.header import Header
 from smtplib import SMTP_SSL, SMTP
 import requests
+import socket
 
 from config import mail_from, mail_password, mail_tls, mail_smtp, mail_to,\
                    tg_server, tg_secret, log_interval, log_reserve
@@ -15,7 +16,10 @@ class Notifier():
         self.host = host
         self.debug = debug
 
-    def emit(self, current_time: str, warn_msgs: List[str], stat: any):
+        if self.host is None or self.host == "":
+            self.host = socket.gethostname()
+
+    def emit(self, current_time: str, warn_msgs: List[Dict[str, str]], stat: any):
         pass
 
 
@@ -44,20 +48,23 @@ class LogNotifier(Notifier):
         logger.addHandler(fh)
         self.logger = logger
 
-    def emit(self, current_time: str, warn_msgs: List[str], stat: any):
+    def emit(self, current_time: str, warn_msgs: List[Dict[str, str]], stat: any):
         self.logger.info("===== report information ====")
         self.logger.info(f"host: {self.host}")
         self.logger.info(f"time: {current_time}")
         for msg in warn_msgs:
-            if "critical" in msg:
-                self.logger.critical(msg)
-            else:
-                self.logger.warning(msg)
-        if stat is not None:
+            if msg["level"] == "critical":
+                self.logger.critical(msg["msg"])
+            elif msg["level"] == "warning":
+                self.logger.warn(msg["msg"])
+            elif msg["level"] == "info":
+                self.logger.info(msg["msg"])
+        if self.debug:
             self.logger.debug("===== debug information ====")
             self.logger.debug(f"time: {current_time}")
-            for rule_name, s in stat.items():
-                self.logger.debug(f"[{rule_name}] {s}")
+            for msg in warn_msgs:
+                if msg["level"] == "debug":
+                    self.logger.debug(msg)
 
 
 class MailNotifier(Notifier):
@@ -69,7 +76,7 @@ class MailNotifier(Notifier):
         self.mail_pass = mail_password
         self.mail_tls = mail_tls
 
-    def emit(self, current_time: str, warn_msgs: List[str], stat: any):
+    def emit(self, current_time: str, warn_msgs: List[Dict[str, str]], stat: any):
 
         if warn_msgs is None or len(warn_msgs) == 0:
             return
@@ -88,21 +95,30 @@ class MailNotifier(Notifier):
 
         has_critical = False
         for msg in warn_msgs:
-            if "critical" in msg:
+            if msg["level"] == "critical":
                 if not has_critical:
                     mail_msgs.append("\nCritical:")
                     has_critical = True
-                mail_msgs.append(msg)
+                mail_msgs.append(msg["msg"])
 
         mail_msgs.append("\nWarning:")
         for msg in warn_msgs:
-            if "critical" not in msg:
-                mail_msgs.append(msg)
+            if msg["level"] == "warning":
+                mail_msgs.append(msg["msg"])
 
-        if stat is not None:
+        has_info = False
+        for msg in warn_msgs:
+            if msg["level"] == "info":
+                if not has_info:
+                    mail_msgs.append("\nInfo:")
+                    has_info = True
+                mail_msgs.append(msg["msg"])
+
+        if self.debug:
             mail_msgs.append("\nDebug:")
-            for rule_name, s in stat.items():
-                mail_msgs.append(f"[{rule_name}] {s}")
+            for msg in warn_msgs:
+                if msg["level"] == "debug":
+                    mail_msgs.append(msg["msg"])
 
         message = "\r\n".join(mail_msgs)
         msg = MIMEText(message, "plain", 'utf-8')
@@ -129,21 +145,30 @@ class TgNotifier(Notifier):
 
         has_critical = False
         for msg in warn_msgs:
-            if "critical" in msg:
+            if msg["level"] == "critical":
                 if not has_critical:
                     tg_msgs.append("\nCritical:")
                     has_critical = True
-                tg_msgs.append(msg)
+                tg_msgs.append(msg["msg"])
 
         tg_msgs.append("\nWarning:")
         for msg in warn_msgs:
-            if "critical" not in msg:
-                tg_msgs.append(msg)
+            if msg["level"] == "warning":
+                tg_msgs.append(msg["msg"])
 
-        if stat is not None:
+        has_info = False
+        for msg in warn_msgs:
+            if msg["level"] == "info":
+                if not has_info:
+                    tg_msgs.append("\nInfo:")
+                    has_info = True
+                tg_msgs.append(msg["msg"])
+
+        if self.debug:
             tg_msgs.append("\nDebug:")
-            for rule_name, s in stat.items():
-                tg_msgs.append(f"[{rule_name}] {s}")
+            for msg in warn_msgs:
+                if msg["level"] == "debug":
+                    tg_msgs.append(msg["msg"])
 
         message = "\n".join(tg_msgs)
         requests.post(self.tg_server, data={"secret": self.tg_secret, "message": message})

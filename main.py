@@ -1,17 +1,20 @@
 import platform
 import traceback
 from config import host, debug, log_file, mail_from, tg_server, interval
-from rules import CPURule, MemRule, DiskRule, NetRule, ListenRule, TempRule, get_current_time
+from rules import CPURule, MemRule, FSRule, NetRule, ListenRule, TempRule, ConnRule, DiskRule
 from notify import LogNotifier, MailNotifier, TgNotifier
+from utils import get_current_time
 
 
 def fire():
     all_rules = [
         CPURule("cpu", debug),
         MemRule("mem", debug),
+        FSRule("fs", debug),
         DiskRule("disk", debug),
         NetRule("net", debug),
-        ListenRule("listen", debug)
+        ListenRule("listen", debug),
+        ConnRule("conn", debug)
     ]
 
     if platform.system() == "Linux":

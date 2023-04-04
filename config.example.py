@@ -11,9 +11,20 @@ cpu_interval = 1                # measure CPU load within 1 second(s)
 mem_load_warn = 0.7             # warning memory usage, >= 70%
 mem_load_critical = 0.95        # critical memory usage, >= 95%
 
-disk_load_warn = 0.7            # warning disk usage, >= 70%
-disk_load_critical = 0.9        # critical disk usage, >= 90%
-disk_filter = None              # collect information on selected disks, e.g., disk_filter = ["/dev/sdc"]
+fs_load_warn = 0.7            # warning disk usage, >= 70%
+fs_load_critical = 0.9        # critical disk usage, >= 90%
+fs_filter = None              # collect information on selected disks, e.g., disk_filter = ["/dev/sdc"]
+
+disk_read_warn = 200             # warning network send rate, >= 200 Mbps
+disk_write_warn = 200             # warning network send rate, >= 200 Mbps
+disk_read_critical = 200             # warning network send rate, >= 200 Mbps
+disk_write_critical = 200             # warning network send rate, >= 200 Mbps
+disk_iops_warn = 3000
+disk_iops_critical = 3000
+disk_io_time_warn = 100
+disk_io_time_critical = 200
+disk_filter = None
+disk_interval = 1
 
 net_conn_warn = 30000           # warning number of net connections, >= 30000
 net_conn_critical = 50000       # critical number of net connections, >= 50000

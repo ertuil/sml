@@ -1,18 +1,21 @@
-from typing import Optional
+from typing import Dict, Optional
 import psutil
 import time
 import socket
 import traceback
 import pySMART
 import platform
+import os
 from utils import _bps_value, _byte_value, _percent_value, get_current_time
 from config import cpu_load_warn, cpu_load_critical, cpu_interval, mem_load_warn, mem_load_critical,\
-                disk_load_warn, disk_load_critical, disk_filter,\
+                fs_usage_warn, fs_usage_critical, fs_filter,\
                 net_send_warn, net_send_packet_warn, net_recv_warn, net_recv_packet_warn,\
                 net_bps_critical, net_pps_critical, net_filter, net_interval,\
                 temp_cpu_critical, temp_cpu_warn, temp_disk_critical, temp_disk_warn,\
                 temp_critical_percent, temp_warn_percent, listen_map,\
-                net_conn_warn, net_conn_critical
+                net_conn_warn, net_conn_critical, disk_io_time_warn, disk_write_critical,\
+                disk_filter, disk_io_time_critical, disk_iops_critical, disk_iops_warn, disk_read_critical,\
+                disk_read_warn, disk_write_warn, disk_interval
 
 
 class Rule():
@@ -32,7 +35,12 @@ class Rule():
 
         s = self.stat()
         w = self.warn(s)
+        if len(w) > 0:
+            w.extend(self.get_top_proc())
         return s, w
+
+    def get_top_proc(self):
+        return []
 
 
 class CPURule(Rule):
@@ -41,6 +49,8 @@ class CPURule(Rule):
         self.cpu_load_warn = cpu_load_warn
         self.cpu_load_critical = cpu_load_critical
         self.cpu_interval = cpu_interval
+
+        self.cpu_proc_top_k = 3
 
     def stat(self):
         cpu_percent = psutil.cpu_percent(interval=self.cpu_interval) / 100
@@ -51,7 +61,7 @@ class CPURule(Rule):
         cpu_15min = cpu_load[1]/cpu_core
         return {"now": cpu_percent, "1min": cpu_1min, "5min": cpu_5min, "15min": cpu_15min}
 
-    def warn(self, stat: dict):
+    def warn(self, stat: Dict):
         if self.cpu_load_warn is None:
             return super().warn(stat)
 
@@ -66,8 +76,18 @@ class CPURule(Rule):
             if value >= self.cpu_load_warn:
                 warn_msgs.append(
                     f"[{self.name}-{item}] warning: {_percent_value(value)} (>= {_percent_value(self.cpu_load_warn)})")
-
         return warn_msgs
+
+    def get_top_proc(self):
+        proc_msgs = []
+
+        cpu_usage_list = [p.as_dict(attrs=["pid", "name", "cpu_times"]) for p in psutil.process_iter()]
+        cpu_usage_list.sort(key=lambda p: sum(p["cpu_times"][:2]), reverse=True)
+
+        for p in cpu_usage_list[:min(self.cpu_proc_top_k, len(cpu_usage_list))]:
+            proc_msgs.append(f"[{self.name}-proc] info: process {p['pid']} {p['name']} \
+(CPU time: system {p['cpu_times'][0]} user {p['cpu_times'][1]})")
+        return proc_msgs
 
 
 class MemRule(Rule):
@@ -75,6 +95,8 @@ class MemRule(Rule):
         super().__init__(name, debug)
         self.mem_load_warn = mem_load_warn
         self.mem_load_critical = mem_load_critical
+
+        self.mem_proc_top_k = 3
 
     def stat(self):
         virtual_mem = psutil.virtual_memory()
@@ -101,49 +123,53 @@ class MemRule(Rule):
         elif usage >= self.mem_load_warn:
             warn_msgs.append(f"[{self.name}-usage] warning: {_percent_value(usage)} \
 (>= {_percent_value(self.mem_load_warn)})")
+
         return warn_msgs
 
+    def get_top_proc(self):
+        proc_msgs = []
 
-class DiskRule(Rule):
-    def __init__(self, name: str = "disk", debug: bool = False):
+        mem_usage_list = [p.as_dict(attrs=["pid", "name", "memory_info"]) for p in psutil.process_iter()]
+        mem_usage_list.sort(key=lambda p: p["memory_info"].rss, reverse=True)
+
+        for p in mem_usage_list[:min(self.mem_proc_top_k, len(mem_usage_list))]:
+            proc_msgs.append(f"[{self.name}-proc] info: process {p['pid']} {p['name']} \
+(rss: {_byte_value(p['memory_info'].rss)}, vms: {_byte_value(p['memory_info'].vms)})")
+        return proc_msgs
+
+
+class FSRule(Rule):
+    def __init__(self, name: str = "fs", debug: bool = False):
         super().__init__(name, debug)
-        self.disk_load_warn = disk_load_warn
-        self.disk_filter = disk_filter
-        self.disk_load_critical = disk_load_critical
-        if self.disk_load_critical is None:
-            self.disk_load_critical = 0.999
+        self.fs_usage_warn = fs_usage_warn
+        self.fs_filter = fs_filter
+        self.fs_usage_critical = fs_usage_critical
+        if self.fs_usage_critical is None:
+            self.fs_usage_critical = 0.999
 
     def stat(self):
-        disk_stat = {}
+        fs_stat = {}
 
         counted_device = []
         for disk in psutil.disk_partitions():
             if disk.device in counted_device:
                 continue
-            if self.disk_filter is None or disk.device in self.disk_filter:
+            if self.fs_filter is None or disk.device in self.fs_filter:
                 disk_usage = psutil.disk_usage(disk.mountpoint)
                 disk_total = _byte_value(disk_usage.total)
                 disk_used = _byte_value(disk_usage.used)
                 disk_free = _byte_value(disk_usage.free)
                 disk_percent = disk_usage.percent / 100
 
-                disk_stat[f"{disk.device}-total"] = disk_total
-                disk_stat[f"{disk.device}-used"] = disk_used
-                disk_stat[f"{disk.device}-free"] = disk_free
-                disk_stat[f"{disk.device}-usage"] = disk_percent
-
-                try:
-                    d = pySMART.Device(disk.device)
-                    disk_stat[f"{disk.device}-SMART"] = d.assessment
-                    if len(d.tests) > 0:
-                        disk_stat[f"{disk.device}-SMART-test"] = d.tests[0].status
-                except Exception as e:
-                    print("[warning] S.M.A.R.T exam not executed", e)
+                fs_stat[f"{disk.device}-total"] = disk_total
+                fs_stat[f"{disk.device}-used"] = disk_used
+                fs_stat[f"{disk.device}-free"] = disk_free
+                fs_stat[f"{disk.device}-usage"] = disk_percent
                 counted_device.append(disk.device)
-        return disk_stat
+        return fs_stat
 
     def warn(self, stat: dict):
-        if self.disk_load_warn is None:
+        if self.fs_usage_warn is None:
             return super().warn(stat)
 
         warn_msgs = []
@@ -159,31 +185,184 @@ class DiskRule(Rule):
             usage = stat.get(key, 0)
             used = stat.get(f"{device_name}-used", "NaN")
             total = stat.get(f"{device_name}-total", "NaN")
-            if self.disk_load_critical is not None and usage >= self.disk_load_critical:
+            if self.fs_usage_critical is not None and usage >= self.fs_usage_critical:
                 warn_msgs.append(f"[{self.name}-{device_name}] critical: {_percent_value(usage)} \
-(>= {_percent_value(self.disk_load_critical)}, {used}/{total})")
-            elif usage >= self.disk_load_warn:
+(>= {_percent_value(self.fs_usage_critical)}, {used}/{total})")
+            elif usage >= self.fs_usage_warn:
                 warn_msgs.append(f"[{self.name}-{device_name}] warning: {_percent_value(usage)} \
-(>= {_percent_value(self.disk_load_warn)}, {used}/{total})")
-
-            # check smart
-            smart_result = stat.get(f"{device_name}-SMART", None)
-            if smart_result and "EMPTY" not in smart_result and "PASS" not in smart_result:
-                warn_msgs.append(f"[{self.name}-{device_name}] critical: SMART {smart_result}")
-
-            smart_log_result = stat.get(f"{device_name}-SMART-test", None)
-            if smart_log_result and "without error" not in smart_log_result:
-                warn_msgs.append(f"[{self.name}-{device_name}] critical: SMART test{smart_log_result}")
-
+(>= {_percent_value(self.fs_usage_warn)}, {used}/{total})")
         return warn_msgs
+
+
+class DiskRule(Rule):
+    def __init__(self, name: str = "disk", debug: bool = False):
+        super().__init__(name, debug)
+        self.disk_iops_critical = disk_iops_critical
+        self.disk_iops_warn = disk_iops_warn
+        self.disk_io_time_warn = disk_io_time_warn
+        self.disk_io_time_critical = disk_io_time_critical
+        self.disk_write_warn = disk_write_warn
+        self.disk_write_critical = disk_write_critical
+        self.disk_read_warn = disk_read_warn
+        self.disk_read_critical = disk_read_critical
+        self.disk_filter = disk_filter
+        self.disk_interval = disk_interval
+        self.existed_disks = []
+        self.disk_proc_top_k = 3
+
+        if platform.system() == "Windows":
+            os.system("diskperf -y")
+
+    def stat(self):
+        disk_stat = {}
+        self.existed_disks.clear()
+
+        disk_old = psutil.disk_io_counters(perdisk=True, nowrap=True)
+        if disk_old is None or len(disk_old) == 0:
+            return disk_stat
+        time.sleep(self.disk_interval)
+        disk_new = psutil.disk_io_counters(perdisk=True, nowrap=True)
+        if disk_new is None:
+            return disk_stat
+
+        for disk_name in disk_new.keys():
+            if self.disk_filter is not None and disk_name not in self.disk_filter:
+                continue
+            if disk_name in self.existed_disks:
+                continue
+            self.existed_disks.append(disk_name)
+            try:
+                disk_stat[f"{disk_name}-read"] = (disk_new[disk_name].read_bytes - disk_old[disk_name].read_bytes) \
+                    / self.disk_interval
+                disk_stat[f"{disk_name}-write"] = (disk_new[disk_name].write_bytes - disk_old[disk_name].write_bytes) \
+                    / self.disk_interval
+                disk_stat[f"{disk_name}-iops"] = (disk_new[disk_name].read_count + disk_new[disk_name].write_count
+                                                  - disk_old[disk_name].read_count - disk_old[disk_name].write_count) \
+                    / self.disk_interval
+            except Exception:
+                disk_stat[f"{disk_name}-read"] = 0
+                disk_stat[f"{disk_name}-write"] = 0
+                disk_stat[f"{disk_name}-iops"] = 0
+
+            try:
+                if platform.system() in ["Linux", "Windows", "Darwin"]:
+                    disk_stat[f"{disk_name}-read-time"] = disk_new[disk_name].read_time
+                    disk_stat[f"{disk_name}-write-time"] = disk_new[disk_name].write_time
+                else:
+                    disk_stat[f"{disk_name}-read-time"] = 0
+                    disk_stat[f"{disk_name}-write-time"] = 0
+            except Exception:
+                disk_stat[f"{disk_name}-read-time"] = 0
+                disk_stat[f"{disk_name}-write-time"] = 0
+
+            try:
+                d = pySMART.Device(disk_name)
+                disk_stat[f"{disk_name}-SMART"] = d.assessment
+                if len(d.tests) > 0:
+                    disk_stat[f"{disk_name}-SMART-test"] = d.tests[0].status
+            except Exception as e:
+                print("[warning] S.M.A.R.T exam not executed", e)
+        return disk_stat
+
+    def warn(self, stat: dict):
+        warn_msgs = []
+
+        for disk_name in self.existed_disks:
+            # check smart
+            smart_result = stat.get(f"{disk_name}-SMART", None)
+            if smart_result and "EMPTY" not in smart_result and "PASS" not in smart_result:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: SMART {smart_result}")
+
+            smart_log_result = stat.get(f"{disk_name}-SMART-test", None)
+            if smart_log_result and "without error" not in smart_log_result:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: SMART test{smart_log_result}")
+
+            disk_read = stat[f"{disk_name}-read"]
+            disk_write = stat[f"{disk_name}-read"]
+            disk_iops = stat[f"{disk_name}-iops"]
+            disk_read_time = stat[f"{disk_name}-read-time"]
+            disk_write_time = stat[f"{disk_name}-write-time"]
+
+            # read bytes
+            if self.disk_read_critical is not None and disk_read > self.disk_read_critical:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: read {_bps_value(disk_read)} \
+(>= {_bps_value(self.disk_read_critical)})")
+            elif self.disk_read_warn is not None and disk_read > self.disk_read_warn:
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: read {_bps_value(disk_read)} \
+(>= {_bps_value(self.disk_read_warn)})")
+
+            # write bytes
+            if self.disk_write_critical is not None and disk_write > self.disk_write_critical:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: write {_bps_value(disk_write)} \
+(>= {_bps_value(self.disk_write_critical)})")
+            elif self.disk_write_warn is not None and disk_write > self.disk_write_warn:
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: write {_byte_value(disk_write)} \
+(>= {_byte_value(self.disk_write_warn)})")
+
+            # read delay
+            if self.disk_io_time_critical is not None and disk_read_time > self.disk_io_time_critical:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: read {disk_read_time} ms \
+(>= {self.disk_io_time_critical} ms)")
+            elif self.disk_io_time_warn is not None and disk_read_time > self.disk_io_time_warn:
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: read {disk_read_time} ms \
+(>= {disk_io_time_warn} ms)")
+
+            # write delay
+            if self.disk_io_time_critical is not None and disk_write_time > self.disk_io_time_critical:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: write {disk_write_time} ms \
+(>= {self.disk_io_time_critical} ms)")
+            elif self.disk_io_time_warn is not None and disk_write_time > self.disk_io_time_warn:
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: write {disk_write_time} ms \
+(>= {disk_io_time_warn} ms)")
+
+            # iops delay
+            if self.disk_iops_critical is not None and disk_iops > self.disk_iops_critical:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: {disk_iops} iops \
+(>= {self.disk_iops_critical} iops)")
+            elif self.disk_iops_warn is not None and disk_iops > self.disk_iops_warn:
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: {disk_iops} iops \
+(>= {disk_iops_warn} iops)")
+        return warn_msgs
+
+    def get_top_proc(self):
+        proc_msgs = []
+
+        disk_usage_list_old = {p.pid: p.info for p in psutil.process_iter(['name', 'pid', 'io_counters'])}
+        time.sleep(self.disk_interval)
+        disk_usage_list_new = {p.pid: p.info for p in psutil.process_iter(['name', 'pid', 'io_counters'])}
+
+        disk_io_diff = []
+        for pid, new_info in disk_usage_list_new.items():
+            if pid not in disk_usage_list_old:
+                continue
+            old_info = disk_usage_list_old[pid]
+            if new_info['io_counters'] is None or old_info['io_counters'] is None:
+                continue
+            name = new_info['name']
+            new_disk_info = new_info['io_counters']
+            old_disk_info = old_info['io_counters']
+            disk_io_diff.append({"pid": pid,
+                                 "name": name,
+                                 "read": new_disk_info.read_bytes - old_disk_info.read_bytes,
+                                 "write": new_disk_info.write_bytes - old_disk_info.write_bytes,
+                                 "iops": new_disk_info.read_count+new_disk_info.write_count
+                                - old_disk_info.read_count+old_disk_info.write_count,
+                                 "total": new_disk_info.read_bytes - old_disk_info.read_bytes
+                                + new_disk_info.write_bytes - old_disk_info.write_bytes
+                                 })
+
+        disk_io_diff.sort(key=lambda p: p["total"], reverse=True)
+
+        for p in disk_io_diff[:min(self.disk_proc_top_k, len(disk_io_diff))]:
+            proc_msgs.append(f"[{self.name}-proc] info: process {p['pid']} {p['name']} \
+(read {_bps_value(p['read'])}, write {_bps_value(p['write'])}, {p['iops']} iops)")
+        return proc_msgs
 
 
 class NetRule(Rule):
     def __init__(self, name: str = "net", debug: bool = False):
         super().__init__(name, debug)
         self.mbps_multipler = 1024 * 1024
-        self.net_conn_warn = net_conn_warn
-        self.net_conn_critical = net_conn_critical
         self.net_send_warn = net_send_warn * self.mbps_multipler
         self.net_recv_warn = net_recv_warn * self.mbps_multipler
         self.net_send_packet_warn = net_send_packet_warn
@@ -214,14 +393,6 @@ class NetRule(Rule):
                     if addr.family == socket.AF_INET6:
                         net_stat[f"{iface}-ipv6"] = addr.address
 
-        net_conn = psutil.net_connections("inet")
-        tcp_conn = psutil.net_connections("tcp")
-        udp_conn = psutil.net_connections("udp")
-
-        net_stat["net-conn"] = len(net_conn)
-        net_stat["tcp-conn"] = len(tcp_conn)
-        net_stat["udp-conn"] = len(udp_conn)
-
         # first count
         old_stat = {}
         net_io = psutil.net_io_counters(pernic=True, nowrap=True)
@@ -251,30 +422,6 @@ class NetRule(Rule):
 
     def warn(self, net_stat: dict):
         warn_msgs = []
-
-        # check number of conn
-
-        try:
-            net_conn = net_stat["net-conn"]
-            tcp_conn = net_stat["tcp-conn"]
-            udp_conn = net_stat["udp-conn"]
-
-            if self.net_conn_critical is not None and net_conn >= self.net_conn_critical:
-                warn_msgs.append(f"[{self.name}] net connection critical {net_conn} (>= {self.net_conn_critical})")
-            elif net_conn >= self.net_conn_warn:
-                warn_msgs.append(f"[{self.name}] net connection warn {net_conn} (>= {self.net_conn_critical})")
-
-            if self.net_conn_critical is not None and tcp_conn >= self.net_conn_critical:
-                warn_msgs.append(f"[{self.name}] tcp connection critical {tcp_conn} (>= {self.net_conn_critical})")
-            elif tcp_conn >= self.net_conn_warn:
-                warn_msgs.append(f"[{self.name}] tcp connection warn {tcp_conn} (>= {self.net_conn_critical})")
-
-            if self.net_conn_critical is not None and udp_conn >= self.net_conn_critical:
-                warn_msgs.append(f"[{self.name}] udp connection critical {udp_conn} (>= {self.net_conn_critical})")
-            elif udp_conn >= self.net_conn_warn:
-                warn_msgs.append(f"[{self.name}] udp connection warn {udp_conn} (>= {self.net_conn_critical})")
-        except KeyError:
-            warn_msgs.append(f"[{self.name}] count connections failed")
 
         for iface in self.count_ifaces:
             try:
@@ -313,6 +460,60 @@ class NetRule(Rule):
                 warn_msgs.append(f"[{self.name}-{iface}] recv warning: {recv_pps} pps \
 (>= {self.net_recv_packet_warn} pps)")
         return warn_msgs
+
+
+class ConnRule(Rule):
+    def __init__(self, name: str, debug: bool = False):
+        super().__init__(name, debug)
+        self.mbps_multipler = 1024 * 1024
+        self.net_conn_warn = net_conn_warn
+        self.net_conn_critical = net_conn_critical
+        self.net_proc_top_k = 3
+
+    def stat(self):
+        net_stat = {}
+        net_conn = psutil.net_connections("inet")
+        tcp_conn = psutil.net_connections("tcp")
+        udp_conn = psutil.net_connections("udp")
+
+        net_stat["net-conn"] = len(net_conn)
+        net_stat["tcp-conn"] = len(tcp_conn)
+        net_stat["udp-conn"] = len(udp_conn)
+        return net_stat
+
+    def warn(self, net_stat: dict):
+        warn_msgs = []
+        net_conn = net_stat["net-conn"]
+        tcp_conn = net_stat["tcp-conn"]
+        udp_conn = net_stat["udp-conn"]
+
+        if self.net_conn_critical is not None and net_conn >= self.net_conn_critical:
+            warn_msgs.append(f"[{self.name}] net connection critical {net_conn} (>= {self.net_conn_critical})")
+        elif net_conn >= self.net_conn_warn:
+            warn_msgs.append(f"[{self.name}] net connection warn {net_conn} (>= {self.net_conn_warn})")
+
+        if self.net_conn_critical is not None and tcp_conn >= self.net_conn_critical:
+            warn_msgs.append(f"[{self.name}] tcp connection critical {tcp_conn} (>= {self.net_conn_critical})")
+        elif tcp_conn >= self.net_conn_warn:
+            warn_msgs.append(f"[{self.name}] tcp connection warn {tcp_conn} (>= {self.net_conn_warn})")
+
+        if self.net_conn_critical is not None and udp_conn >= self.net_conn_critical:
+            warn_msgs.append(f"[{self.name}] udp connection critical {udp_conn} (>= {self.net_conn_critical})")
+        elif udp_conn >= self.net_conn_warn:
+            warn_msgs.append(f"[{self.name}] udp connection warn {udp_conn} (>= {self.net_conn_warn})")
+        return warn_msgs
+
+    def get_top_proc(self):
+        proc_msgs = []
+
+        net_usage_list = [p.as_dict(attrs=["pid", "name", "connections"]) for p in psutil.process_iter()]
+        print(net_usage_list)
+        net_usage_list.sort(key=lambda p: len(p["connections"]) if p["connections"] is not None else 0, reverse=True)
+
+        for p in net_usage_list[:min(self.net_proc_top_k, len(net_usage_list))]:
+            proc_msgs.append(f"[{self.name}-proc] info: process {p['pid']} {p['name']} \
+(connection: {len(p['connections'])})")
+        return proc_msgs
 
 
 class TempRule(Rule):

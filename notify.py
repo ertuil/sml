@@ -33,6 +33,8 @@ class LogNotifier(Notifier):
         logger = logging.getLogger(f"sml-{name}")
         if debug:
             logger.setLevel(logging.DEBUG)
+        else:
+            logger.setLevel(logging.INFO)
         if self.log_file is None or self.log_file == "":
             fh = logging.StreamHandler()
         elif self.log_interval is not None and self.log_interval > 0:
@@ -77,18 +79,8 @@ class MailNotifier(Notifier):
         self.mail_tls = mail_tls
 
     def emit(self, current_time: str, warn_msgs: List[Dict[str, str]], stat: any):
-
-        if warn_msgs is None or len(warn_msgs) == 0:
-            return
-
-        sender = SMTP(self.mail_smtp)
-        if self.mail_tls:
-            sender = SMTP_SSL(self.mail_smtp)
-        if not self.debug:
-            sender.set_debuglevel(0)
-
-        sender.ehlo(self.mail_smtp)
-        sender.login(self.mail_from, self.mail_pass)
+        
+        need_emit = False
 
         mail_msgs = [f"Host:\n{self.host}", f"Time:\n{current_time}"]
         mail_title = f"sml report - {self.host} - {current_time}"
@@ -100,11 +92,18 @@ class MailNotifier(Notifier):
                     mail_msgs.append("\nCritical:")
                     has_critical = True
                 mail_msgs.append(msg["msg"])
+                if not need_emit:
+                    need_emit = True
 
-        mail_msgs.append("\nWarning:")
+        has_warn = False
         for msg in warn_msgs:
             if msg["level"] == "warning":
+                if not has_warn:
+                    mail_msgs.append("\nWarning:")
+                    has_warn = True
                 mail_msgs.append(msg["msg"])
+                if not need_emit:
+                    need_emit = True
 
         has_info = False
         for msg in warn_msgs:
@@ -113,12 +112,26 @@ class MailNotifier(Notifier):
                     mail_msgs.append("\nInfo:")
                     has_info = True
                 mail_msgs.append(msg["msg"])
+                if not need_emit:
+                    need_emit = True
+
+        if not need_emit:
+            return
 
         if self.debug:
             mail_msgs.append("\nDebug:")
             for msg in warn_msgs:
                 if msg["level"] == "debug":
                     mail_msgs.append(msg["msg"])
+
+        sender = SMTP(self.mail_smtp)
+        if self.mail_tls:
+            sender = SMTP_SSL(self.mail_smtp)
+        if not self.debug:
+            sender.set_debuglevel(0)
+
+        sender.ehlo(self.mail_smtp)
+        sender.login(self.mail_from, self.mail_pass)
 
         message = "\r\n".join(mail_msgs)
         msg = MIMEText(message, "plain", 'utf-8')
@@ -138,8 +151,7 @@ class TgNotifier(Notifier):
 
     def emit(self, current_time: str, warn_msgs: List[str], stat: any):
 
-        if warn_msgs is None or len(warn_msgs) == 0:
-            return
+        need_emit = False
 
         tg_msgs = [f"sml report - {self.host} - {current_time}", f"Host:\n{self.host}", f"Time:\n{current_time}"]
 
@@ -150,11 +162,18 @@ class TgNotifier(Notifier):
                     tg_msgs.append("\nCritical:")
                     has_critical = True
                 tg_msgs.append(msg["msg"])
+                if not need_emit:
+                    need_emit = True
 
-        tg_msgs.append("\nWarning:")
+        has_warn = False
         for msg in warn_msgs:
             if msg["level"] == "warning":
+                if not has_warn:
+                    tg_msgs.append("\nWarning:")
+                    has_warn = True
                 tg_msgs.append(msg["msg"])
+                if not need_emit:
+                    need_emit = True
 
         has_info = False
         for msg in warn_msgs:
@@ -163,6 +182,11 @@ class TgNotifier(Notifier):
                     tg_msgs.append("\nInfo:")
                     has_info = True
                 tg_msgs.append(msg["msg"])
+                if not need_emit:
+                    need_emit = True
+        
+        if not need_emit:
+            return
 
         message = "\n".join(tg_msgs)
         requests.post(self.tg_server, data={"secret": self.tg_secret, "message": message})
@@ -173,6 +197,5 @@ class TgNotifier(Notifier):
             for msg in warn_msgs:
                 if msg["level"] == "debug":
                     tg_msgs.append(msg["msg"])
-
-        message = "\n".join(tg_msgs)
-        requests.post(self.tg_server, data={"secret": self.tg_secret, "message": message})
+            message = "\n".join(tg_msgs)
+            requests.post(self.tg_server, data={"secret": self.tg_secret, "message": message})

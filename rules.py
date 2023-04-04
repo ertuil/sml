@@ -93,15 +93,17 @@ class CPURule(Rule):
                 self.warning(item, f"{_percent_value(value)} (>= {_percent_value(self.cpu_load_warn)})")
 
     def get_top_proc(self):
+        cpu_core = psutil.cpu_count()
         for p in psutil.process_iter():
             p.cpu_percent(interval=None)
 
         time.sleep(self.cpu_interval)
-        cpu_usage_list = [p.as_dict(attrs=["pid", "name", "cpu_percent"]) for p in psutil.process_iter()]
+        cpu_usage_list = [p.as_dict(attrs=["pid", "name", "cpu_percent"]) for p in psutil.process_iter()
+                          if "idle" not in p.name().lower()]
         cpu_usage_list.sort(key=lambda p: p["cpu_percent"], reverse=True)
 
         for p in cpu_usage_list[:min(self.cpu_proc_top_k, len(cpu_usage_list))]:
-            self.info("proc", f"process {p['pid']} {p['name']} (CPU {_percent_value(p['cpu_percent'])})")
+            self.info("proc", f"process {p['pid']} {p['name']} (CPU {_percent_value(p['cpu_percent']/cpu_core)})")
 
 
 class MemRule(Rule):
@@ -341,7 +343,7 @@ class DiskRule(Rule):
         for p in disk_io_diff[:min(self.disk_proc_top_k, len(disk_io_diff))]:
             self.info("proc", f"process {p['pid']} {p['name']} \
 (read {_bps_value(p['read'])}, write {_bps_value(p['write'])}, {p['iops']} iops)")
-                      
+
 
 class NetRule(Rule):
     def __init__(self, name: str = "net", debug: bool = False):

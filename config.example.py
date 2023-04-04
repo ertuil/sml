@@ -19,8 +19,8 @@ disk_read_warn = 80             # warning disk read rate, >= 200 Mbps
 disk_write_warn = 80            # warning disk write rate, >= 200 Mbps
 disk_read_critical = 100        # critical disk read rate, >= 200 Mbps
 disk_write_critical = 100       # critical disk write rate, >= 200 Mbps
-disk_iops_warn = 3000           # warning disk iops, >= 3000 iops
-disk_iops_critical = 5000       # critical disk iops, >= 5000 iops
+disk_iops_warn = 1000           # warning disk iops, >= 3000 iops
+disk_iops_critical = 2000       # critical disk iops, >= 5000 iops
 disk_io_time_warn = 0.5         # warning disk busy time, >= 50%
 disk_io_time_critical = 0.7     # critical disk busy time, >= 70%
 disk_filter = None              # collect information on selected disk, e.g., fs_filter = ["/dev/sda"]

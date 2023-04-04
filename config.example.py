@@ -15,6 +15,9 @@ disk_load_warn = 0.7            # warning disk usage, >= 70%
 disk_load_critical = 0.9        # critical disk usage, >= 90%
 disk_filter = None              # collect information on selected disks, e.g., disk_filter = ["/dev/sdc"]
 
+net_conn_warn = 30000           # warning number of net connections, >= 30000
+net_conn_critical = 50000       # critical number of net connections, >= 50000
+
 net_send_warn = 200             # warning network send rate, >= 200 Mbps
 net_recv_warn = 200             # warning network recv rate, >= 200 Mbps
 net_bps_critical = 800          # critical network rate, >= 800 Mbps

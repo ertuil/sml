@@ -11,7 +11,8 @@ from config import cpu_load_warn, cpu_load_critical, cpu_interval, mem_load_warn
                 net_send_warn, net_send_packet_warn, net_recv_warn, net_recv_packet_warn,\
                 net_bps_critical, net_pps_critical, net_filter, net_interval,\
                 temp_cpu_critical, temp_cpu_warn, temp_disk_critical, temp_disk_warn,\
-                temp_critical_percent, temp_warn_percent, listen_map
+                temp_critical_percent, temp_warn_percent, listen_map,\
+                net_conn_warn, net_conn_critical
 
 
 class Rule():
@@ -181,6 +182,8 @@ class NetRule(Rule):
     def __init__(self, name: str = "net", debug: bool = False):
         super().__init__(name, debug)
         self.mbps_multipler = 1024 * 1024
+        self.net_conn_warn = net_conn_warn
+        self.net_conn_critical = net_conn_critical
         self.net_send_warn = net_send_warn * self.mbps_multipler
         self.net_recv_warn = net_recv_warn * self.mbps_multipler
         self.net_send_packet_warn = net_send_packet_warn
@@ -211,6 +214,14 @@ class NetRule(Rule):
                     if addr.family == socket.AF_INET6:
                         net_stat[f"{iface}-ipv6"] = addr.address
 
+        net_conn = psutil.net_connections("inet")
+        tcp_conn = psutil.net_connections("tcp")
+        udp_conn = psutil.net_connections("udp")
+
+        net_stat["net-conn"] = len(net_conn)
+        net_stat["tcp-conn"] = len(tcp_conn)
+        net_stat["udp-conn"] = len(udp_conn)
+
         # first count
         old_stat = {}
         net_io = psutil.net_io_counters(pernic=True, nowrap=True)
@@ -240,6 +251,30 @@ class NetRule(Rule):
 
     def warn(self, net_stat: dict):
         warn_msgs = []
+
+        # check number of conn
+
+        try:
+            net_conn = net_stat["net-conn"]
+            tcp_conn = net_stat["tcp-conn"]
+            udp_conn = net_stat["udp-conn"]
+
+            if self.net_conn_critical is not None and net_conn >= self.net_conn_critical:
+                warn_msgs.append(f"[{self.name}] net connection critical {net_conn} (>= {self.net_conn_critical})")
+            elif net_conn >= self.net_conn_warn:
+                warn_msgs.append(f"[{self.name}] net connection warn {net_conn} (>= {self.net_conn_critical})")
+
+            if self.net_conn_critical is not None and tcp_conn >= self.net_conn_critical:
+                warn_msgs.append(f"[{self.name}] tcp connection critical {tcp_conn} (>= {self.net_conn_critical})")
+            elif tcp_conn >= self.net_conn_warn:
+                warn_msgs.append(f"[{self.name}] tcp connection warn {tcp_conn} (>= {self.net_conn_critical})")
+
+            if self.net_conn_critical is not None and udp_conn >= self.net_conn_critical:
+                warn_msgs.append(f"[{self.name}] udp connection critical {udp_conn} (>= {self.net_conn_critical})")
+            elif udp_conn >= self.net_conn_warn:
+                warn_msgs.append(f"[{self.name}] udp connection warn {udp_conn} (>= {self.net_conn_critical})")
+        except KeyError:
+            warn_msgs.append(f"[{self.name}] count connections failed")
 
         for iface in self.count_ifaces:
             try:

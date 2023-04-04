@@ -4,6 +4,7 @@ import time
 import socket
 import traceback
 import pySMART
+import docker
 import platform
 import os
 from utils import _bps_value, _byte_value, _percent_value, get_current_time
@@ -15,7 +16,7 @@ from config import cpu_load_warn, cpu_load_critical, cpu_interval, mem_load_warn
                 temp_critical_percent, temp_warn_percent, listen_map,\
                 net_conn_warn, net_conn_critical, disk_io_time_warn, disk_write_critical,\
                 disk_filter, disk_io_time_critical, disk_iops_critical, disk_iops_warn, disk_read_critical,\
-                disk_read_warn, disk_write_warn, disk_interval
+                disk_read_warn, disk_write_warn, disk_interval, docker_url, docker_watch_containers
 
 
 class Rule():
@@ -581,3 +582,38 @@ class ListenRule(Rule):
                 protocol = value["protocol"]
                 port = value["port"]
                 self.critical(name, f"is not listening at {protocol}:{port}")
+
+
+class DockerRule(Rule):
+    def __init__(self, name: str = "docker", debug: bool = False):
+        super().__init__(name, debug)
+        self.docker_url = docker_url
+        self.docker_watch_containers = docker_watch_containers
+
+    def stat(self):
+        docker_stat = {}
+        if self.docker_watch_containers is None or len(self.docker_watch_containers) == 0:
+            return docker_stat
+
+        if self.docker_url is not None and self.docker_url != "":
+            client = docker.DockerClient(base_url=self.docker_url)
+        else:
+            client = docker.from_env()
+
+        for container in client.containers.list(all=True):
+            container_name = container.name
+            container_status = container.status
+            docker_stat[container_name] = container_status
+        return docker_stat
+
+    def check(self, stat: dict):
+        if self.docker_watch_containers is None or len(self.docker_watch_containers) == 0:
+            return
+
+        for container_name in self.docker_watch_containers:
+            try:
+                container_status = stat[container_name].lower()
+                if "up" not in container_status and "run" not in container_status and "healthy" not in container_status:
+                    self.critical(container_name, f"wrong status ({container_status})")
+            except KeyError:
+                self.critical(container_name, "container not found")

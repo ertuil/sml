@@ -48,6 +48,10 @@ temp_critical_percent = 0.8     # warning misc temperature, >= 80% critical temp
 
 listen_map = []                 # watch listen TCP/UDP sockets, e.g., listen_map = [("dns", "udp", 53)]
 
+docker_url = ""                 # docker daemon, leave empty to use automatic configure
+docker_watch_containers = None  # watch the status of the containers
+
+
 # ===== notify settings =====
 log_file = 'sml.log'            # log notifier, enabled if the filename is specified
 log_interval = 7                # enable log rotating, single log file for 7 days

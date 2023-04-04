@@ -246,16 +246,10 @@ class DiskRule(Rule):
                 disk_stat[f"{disk_name}-write"] = 0
                 disk_stat[f"{disk_name}-iops"] = 0
 
-            try:
-                if platform.system() in ["Linux", "Windows", "Darwin"]:
-                    disk_stat[f"{disk_name}-read-time"] = disk_new[disk_name].read_time
-                    disk_stat[f"{disk_name}-write-time"] = disk_new[disk_name].write_time
-                else:
-                    disk_stat[f"{disk_name}-read-time"] = 0
-                    disk_stat[f"{disk_name}-write-time"] = 0
-            except Exception:
-                disk_stat[f"{disk_name}-read-time"] = 0
-                disk_stat[f"{disk_name}-write-time"] = 0
+            if platform.system() == "Linux":
+                disk_stat[f"{disk_name}-time"] = disk_new[disk_name].busy_time
+            else:
+                disk_stat[f"{disk_name}-time"] = 0
 
             try:
                 d = pySMART.Device(disk_name)
@@ -282,8 +276,7 @@ class DiskRule(Rule):
             disk_read = stat[f"{disk_name}-read"]
             disk_write = stat[f"{disk_name}-read"]
             disk_iops = stat[f"{disk_name}-iops"]
-            disk_read_time = stat[f"{disk_name}-read-time"]
-            disk_write_time = stat[f"{disk_name}-write-time"]
+            disk_time = stat[f"{disk_name}-time"]
 
             # read bytes
             if self.disk_read_critical is not None and disk_read > self.disk_read_critical:
@@ -302,22 +295,14 @@ class DiskRule(Rule):
 (>= {_byte_value(self.disk_write_warn)})")
 
             # read delay
-            if self.disk_io_time_critical is not None and disk_read_time > self.disk_io_time_critical:
-                warn_msgs.append(f"[{self.name}-{disk_name}] critical: read {disk_read_time} ms \
+            if self.disk_io_time_critical is not None and disk_time > self.disk_io_time_critical:
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: io {disk_time} ms \
 (>= {self.disk_io_time_critical} ms)")
-            elif self.disk_io_time_warn is not None and disk_read_time > self.disk_io_time_warn:
-                warn_msgs.append(f"[{self.name}-{disk_name}] warn: read {disk_read_time} ms \
+            elif self.disk_io_time_warn is not None and disk_time > self.disk_io_time_warn:
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: io {disk_time} ms \
 (>= {disk_io_time_warn} ms)")
 
-            # write delay
-            if self.disk_io_time_critical is not None and disk_write_time > self.disk_io_time_critical:
-                warn_msgs.append(f"[{self.name}-{disk_name}] critical: write {disk_write_time} ms \
-(>= {self.disk_io_time_critical} ms)")
-            elif self.disk_io_time_warn is not None and disk_write_time > self.disk_io_time_warn:
-                warn_msgs.append(f"[{self.name}-{disk_name}] warn: write {disk_write_time} ms \
-(>= {disk_io_time_warn} ms)")
-
-            # iops delay
+            # iops 
             if self.disk_iops_critical is not None and disk_iops > self.disk_iops_critical:
                 warn_msgs.append(f"[{self.name}-{disk_name}] critical: {disk_iops} iops \
 (>= {self.disk_iops_critical} iops)")

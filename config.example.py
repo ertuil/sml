@@ -26,15 +26,15 @@ disk_io_time_critical = 100     # critical disk io delay, >= 100 ms
 disk_filter = None              # collect information on selected disk, e.g., fs_filter = ["/dev/sda"]
 disk_interval = 1               # collect network information within 1 second(s)
 
-net_conn_warn = 30000           # warning number of net connections, >= 30000
-net_conn_critical = 50000       # critical number of net connections, >= 50000
+net_conn_warn = 10000          # warning number of net connections, >= 10000
+net_conn_critical = 30000      # critical number of net connections, >= 300000
 
 net_send_warn = 200             # warning network send rate, >= 200 Mbps
 net_recv_warn = 200             # warning network recv rate, >= 200 Mbps
 net_bps_critical = 800          # critical network rate, >= 800 Mbps
-net_send_packet_warn = 5000     # warning network send rate, >= 5000 pps
-net_recv_packet_warn = 5000     # warning network recv rate, >= 5000 pps
-net_pps_critical = 7000         # critical network send rate, >= 7000 pps
+net_send_packet_warn = 60000    # warning network send rate, >= 80000 pps
+net_recv_packet_warn = 60000    # warning network recv rate, >= 80000 pps
+net_pps_critical = 80000       # critical network send rate, >= 80000 pps
 net_filter = None               # collect information only on selected nic(s), e.g., net_filter = ["lo", "eth0"]
 net_interval = 1                # collect network information within 1 second(s)
 

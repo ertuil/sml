@@ -81,12 +81,16 @@ class CPURule(Rule):
     def get_top_proc(self):
         proc_msgs = []
 
-        cpu_usage_list = [p.as_dict(attrs=["pid", "name", "cpu_times"]) for p in psutil.process_iter()]
-        cpu_usage_list.sort(key=lambda p: sum(p["cpu_times"][:2]), reverse=True)
+        for p in psutil.process_iter():
+            p.cpu_percent(interval=None)
+
+        time.sleep(self.cpu_interval)
+        cpu_usage_list = [p.as_dict(attrs=["pid", "name", "cpu_percent"]) for p in psutil.process_iter()]
+        cpu_usage_list.sort(key=lambda p: p["cpu_percent"], reverse=True)
 
         for p in cpu_usage_list[:min(self.cpu_proc_top_k, len(cpu_usage_list))]:
             proc_msgs.append(f"[{self.name}-proc] info: process {p['pid']} {p['name']} \
-(CPU time: system {p['cpu_times'][0]} user {p['cpu_times'][1]})")
+(CPU {_percent_value(p['cpu_percent'])})")
         return proc_msgs
 
 
@@ -297,11 +301,11 @@ class DiskRule(Rule):
 
             # busy time percent
             if self.disk_io_time_critical is not None and disk_time > self.disk_io_time_critical:
-                warn_msgs.append(f"[{self.name}-{disk_name}] critical: io {_percent_value(disk_time)} ms \
-(>= {_percent_value(self.disk_io_time_critical)} ms)")
+                warn_msgs.append(f"[{self.name}-{disk_name}] critical: io {_percent_value(disk_time)} \
+(>= {_percent_value(self.disk_io_time_critical)})")
             elif self.disk_io_time_warn is not None and disk_time > self.disk_io_time_warn:
-                warn_msgs.append(f"[{self.name}-{disk_name}] warn: io {_percent_value(disk_time)} ms \
-(>= {_percent_value(self.disk_io_time_warn)} ms)")
+                warn_msgs.append(f"[{self.name}-{disk_name}] warn: io {_percent_value(disk_time)} \
+(>= {_percent_value(self.disk_io_time_warn)})")
 
             # iops 
             if self.disk_iops_critical is not None and disk_iops > self.disk_iops_critical:

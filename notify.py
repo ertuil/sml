@@ -64,7 +64,7 @@ class LogNotifier(Notifier):
             self.logger.debug(f"time: {current_time}")
             for msg in warn_msgs:
                 if msg["level"] == "debug":
-                    self.logger.debug(msg)
+                    self.logger.debug(msg["msg"])
 
 
 class MailNotifier(Notifier):
@@ -164,6 +164,10 @@ class TgNotifier(Notifier):
                     has_info = True
                 tg_msgs.append(msg["msg"])
 
+        message = "\n".join(tg_msgs)
+        requests.post(self.tg_server, data={"secret": self.tg_secret, "message": message})
+
+        tg_msgs.clear()
         if self.debug:
             tg_msgs.append("\nDebug:")
             for msg in warn_msgs:

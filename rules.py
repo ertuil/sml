@@ -394,6 +394,8 @@ class NetRule(Rule):
         if net_io is None:
             return net_stat
         for iface, result in net_io.items():
+            if self.net_filter is not None and iface not in self.net_filter:
+                continue
             try:
                 net_stat[f"{iface}-send-bps"] = (result.bytes_sent - old_stat[f"{iface}-send-byte"])/self.interval
                 net_stat[f"{iface}-recv-bps"] = (result.bytes_recv - old_stat[f"{iface}-recv-byte"])/self.interval
@@ -542,8 +544,8 @@ class ListenRule(Rule):
                 port = r[2]
                 key = f"{protocol}{port}"
                 self.listen_map[key] = {"name": name, "port": port, "protocol": protocol, "checked": False}
-            except Exception as e:
-                traceback.print_exc(e)
+            except Exception:
+                traceback.print_exc()
                 continue
 
     def stat(self):

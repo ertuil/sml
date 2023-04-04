@@ -29,7 +29,7 @@ def fire():
             all_warning.extend(warn)
             all_states[r.name] = states
         except Exception as e:
-            traceback.print_exc(e)
+            traceback.print_exc()
             all_warning.insert(0, f"[{r.name}] critical: {e}")
 
     return current_time, all_warning, all_states

@@ -79,7 +79,7 @@ class MailNotifier(Notifier):
         self.mail_tls = mail_tls
 
     def emit(self, current_time: str, warn_msgs: List[Dict[str, str]], stat: any):
-        
+
         need_emit = False
 
         mail_msgs = [f"Host:\n{self.host}", f"Time:\n{current_time}"]
@@ -184,7 +184,7 @@ class TgNotifier(Notifier):
                 tg_msgs.append(msg["msg"])
                 if not need_emit:
                     need_emit = True
-        
+
         if not need_emit:
             return
 

@@ -348,11 +348,11 @@ class DiskRule(Rule):
 
             # busy time percent
             if self.disk_io_time_critical is not None and disk_time >= self.disk_io_time_critical:
-                self.critical(disk_name, f"io {_percent_value(disk_time)} \
+                self.critical(disk_name, f"busy {_percent_value(disk_time)} \
 (>= {_percent_value(self.disk_io_time_critical)})")
                 self.warn_iops = True
             elif self.disk_io_time_warn is not None and disk_time >= self.disk_io_time_warn:
-                self.warning(disk_name, f"io {_percent_value(disk_time)} \
+                self.warning(disk_name, f"busy {_percent_value(disk_time)} \
 (>= {_percent_value(self.disk_io_time_warn)})")
                 self.warn_iops = True
 

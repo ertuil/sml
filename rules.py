@@ -37,16 +37,29 @@ class Rule():
             current_time_str = get_current_time()
 
         self._clear_msgs()
-        s = self.stat()
-        self.check(s)
-        if len(self.msgs) > 0:
-            self.get_top_proc()
+        try:
+            s = self.stat()
+            self.check(s)
+        except Exception as e:
+            self.critical("core", f"run monitor error: {e}")
+        try:
+            if len(self.msgs) > 0:
+                self.get_top_proc()
+        except Exception as e:
+            self.critical("core", f"enumerate processes error: {e}")
         if self.debug:
             self.debug_stat(s)
         return s, self.msgs
 
     def get_top_proc(self):
         pass
+
+    def get_proc_name(self, process: psutil.Process):
+        if len(process.cmdline()) > 0:
+            return " ".join(process.cmdline())
+        if process.name() != "":
+            return process.name()
+        return process.exe()
 
     def _clear_msgs(self):
         self.msgs.clear()
@@ -99,12 +112,12 @@ class CPURule(Rule):
             p.cpu_percent(interval=None)
 
         time.sleep(self.cpu_interval)
-        cpu_usage_list = [p.as_dict(attrs=["pid", "name", "cpu_percent"]) for p in psutil.process_iter()
+        cpu_usage_list = [p for p in psutil.process_iter()
                           if "idle" not in p.name().lower()]
-        cpu_usage_list.sort(key=lambda p: p["cpu_percent"], reverse=True)
+        cpu_usage_list.sort(key=lambda p: p.cpu_percent(), reverse=True)
 
         for p in cpu_usage_list[:min(self.cpu_proc_top_k, len(cpu_usage_list))]:
-            self.info("proc", f"process {p['pid']} {p['name']} (CPU {_percent_value(p['cpu_percent']/cpu_core)})")
+            self.info("proc", f"id: {p.pid} {self.get_proc_name(p)} (CPU {_percent_value(p.cpu_percent()/cpu_core)})")
 
 
 class MemRule(Rule):
@@ -141,12 +154,12 @@ class MemRule(Rule):
 (>= {_percent_value(self.mem_load_warn)})")
 
     def get_top_proc(self):
-        mem_usage_list = [p.as_dict(attrs=["pid", "name", "memory_info"]) for p in psutil.process_iter()]
-        mem_usage_list.sort(key=lambda p: p["memory_info"].rss, reverse=True)
+        mem_usage_list = [p for p in psutil.process_iter()]
+        mem_usage_list.sort(key=lambda p: p.memory_info().rss, reverse=True)
 
         for p in mem_usage_list[:min(self.mem_proc_top_k, len(mem_usage_list))]:
-            self.info("proc", f"process {p['pid']} {p['name']} \
-(rss: {_byte_value(p['memory_info'].rss)}, vms: {_byte_value(p['memory_info'].vms)})")
+            self.info("proc", f"id: {p.pid} {self.get_proc_name(p)} \
+(rss: {_byte_value(p.memory_info().rss)}, vms: {_byte_value(p.memory_info().vms)})")
 
 
 class FSRule(Rule):
@@ -285,50 +298,50 @@ class DiskRule(Rule):
             disk_time = stat[f"{disk_name}-time"]
 
             # read bytes
-            if self.disk_read_critical is not None and disk_read > self.disk_read_critical:
+            if self.disk_read_critical is not None and disk_read >= self.disk_read_critical:
                 self.critical(disk_name, f"read {_bps_value(disk_read)} \
 (>= {_bps_value(self.disk_read_critical)})")
-            elif self.disk_read_warn is not None and disk_read > self.disk_read_warn:
+            elif self.disk_read_warn is not None and disk_read >= self.disk_read_warn:
                 self.warning(disk_name, f"read {_bps_value(disk_read)} \
 (>= {_bps_value(self.disk_read_warn)})")
 
             # write bytes
-            if self.disk_write_critical is not None and disk_write > self.disk_write_critical:
+            if self.disk_write_critical is not None and disk_write >= self.disk_write_critical:
                 self.critical(disk_name, f"write {_bps_value(disk_write)} \
 (>= {_bps_value(self.disk_write_critical)})")
-            elif self.disk_write_warn is not None and disk_write > self.disk_write_warn:
+            elif self.disk_write_warn is not None and disk_write >= self.disk_write_warn:
                 self.warning(disk_name, f"write {_byte_value(disk_write)} \
 (>= {_byte_value(self.disk_write_warn)})")
 
             # busy time percent
-            if self.disk_io_time_critical is not None and disk_time > self.disk_io_time_critical:
+            if self.disk_io_time_critical is not None and disk_time >= self.disk_io_time_critical:
                 self.critical(disk_name, f"io {_percent_value(disk_time)} \
 (>= {_percent_value(self.disk_io_time_critical)})")
-            elif self.disk_io_time_warn is not None and disk_time > self.disk_io_time_warn:
+            elif self.disk_io_time_warn is not None and disk_time >= self.disk_io_time_warn:
                 self.warning(disk_name, f"io {_percent_value(disk_time)} \
 (>= {_percent_value(self.disk_io_time_warn)})")
 
             # iops
-            if self.disk_iops_critical is not None and disk_iops > self.disk_iops_critical:
+            if self.disk_iops_critical is not None and disk_iops >= self.disk_iops_critical:
                 self.critical(disk_name, f"{disk_iops} iops (>= {self.disk_iops_critical} iops)")
-            elif self.disk_iops_warn is not None and disk_iops > self.disk_iops_warn:
+            elif self.disk_iops_warn is not None and disk_iops >= self.disk_iops_warn:
                 self.warning(disk_name, f"{disk_iops} iops (>= {disk_iops_warn} iops)")
 
     def get_top_proc(self):
-        disk_usage_list_old = {p.pid: p.info for p in psutil.process_iter(['name', 'pid', 'io_counters'])}
+        disk_usage_list_old = {p.pid: p for p in psutil.process_iter()}
         time.sleep(self.disk_interval)
-        disk_usage_list_new = {p.pid: p.info for p in psutil.process_iter(['name', 'pid', 'io_counters'])}
+        disk_usage_list_new = {p.pid: p for p in psutil.process_iter()}
 
         disk_io_diff = []
-        for pid, new_info in disk_usage_list_new.items():
+        for pid, new_process in disk_usage_list_new.items():
             if pid not in disk_usage_list_old:
                 continue
-            old_info = disk_usage_list_old[pid]
-            if new_info['io_counters'] is None or old_info['io_counters'] is None:
+            old_process = disk_usage_list_old[pid]
+            if new_process.io_counters() is None or old_process.io_counters() is None:
                 continue
-            name = new_info['name']
-            new_disk_info = new_info['io_counters']
-            old_disk_info = old_info['io_counters']
+            name = self.get_proc_name(new_process)
+            new_disk_info = new_process.io_counters()
+            old_disk_info = old_process.io_counters()
             disk_io_diff.append({"pid": pid,
                                  "name": name,
                                  "read": new_disk_info.read_bytes - old_disk_info.read_bytes,
@@ -342,7 +355,7 @@ class DiskRule(Rule):
         disk_io_diff.sort(key=lambda p: p["total"], reverse=True)
 
         for p in disk_io_diff[:min(self.disk_proc_top_k, len(disk_io_diff))]:
-            self.info("proc", f"process {p['pid']} {p['name']} \
+            self.info("proc", f"id: {p['pid']} {p['name']} \
 (read {_bps_value(p['read'])}, write {_bps_value(p['write'])}, {p['iops']} iops)")
 
 
@@ -480,13 +493,12 @@ class ConnRule(Rule):
             self.warning("udp conn", f"{udp_conn} (>= {self.net_conn_warn})")
 
     def get_top_proc(self):
-        net_usage_list = [p.as_dict(attrs=["pid", "name", "connections"]) for p in psutil.process_iter()]
-        print(net_usage_list)
-        net_usage_list.sort(key=lambda p: len(p["connections"]) if p["connections"] is not None else 0, reverse=True)
+        net_usage_list = [p for p in psutil.process_iter()]
+        net_usage_list.sort(key=lambda p: len(p.connections()) if p.connections() is not None else 0, reverse=True)
 
         for p in net_usage_list[:min(self.net_proc_top_k, len(net_usage_list))]:
-            self.info("proc", f"process {p['pid']} {p['name']} \
-(connection: {len(p['connections'])})")
+            self.info("proc", f"id {p.pid} {self.get_proc_name(p)} \
+(connection: {len(p.connections())})")
 
 
 class TempRule(Rule):

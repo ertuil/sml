@@ -22,6 +22,9 @@ def fire():
     if platform.system() == "Linux":
         all_rules.append(TempRule("temperature", debug))
 
+    if len(all_rules) > 0 and not all_rules[0].is_root:
+        print("Warning: sml is not running in the root(admin) mode")
+
     all_warning = []
     all_states = {}
     current_time = get_current_time()

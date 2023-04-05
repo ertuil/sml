@@ -64,7 +64,7 @@ class Rule():
         if process.name() != "":
             return process.name()
         return process.exe()
-    
+
     def check_admin(self):
         is_root = False
         if platform.system() in ["Linux", "Darwin"]:

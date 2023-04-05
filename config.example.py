@@ -1,6 +1,6 @@
 # ===== global settings =====
 debug = True                    # enable debug mode
-host = "localhost"              # the node's name
+host = ""                       # the node's name, default use the hostname
 interval = 0                    # collect information periodically (in seconds)
 
 # ===== monitor settings =====
@@ -26,8 +26,8 @@ disk_io_time_critical = 0.7     # critical disk busy time, >= 70%
 disk_filter = None              # collect information on selected disk, e.g., fs_filter = ["/dev/sda"]
 disk_interval = 1               # collect network information within 1 second(s)
 
-net_conn_warn = 10000          # warning number of net connections, >= 10000
-net_conn_critical = 30000      # critical number of net connections, >= 300000
+net_conn_warn = 5000          # warning number of net connections, >= 10000
+net_conn_critical = 10000      # critical number of net connections, >= 300000
 
 net_send_warn = 200             # warning network send rate, >= 200 Mbps
 net_recv_warn = 200             # warning network recv rate, >= 200 Mbps

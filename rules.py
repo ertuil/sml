@@ -364,7 +364,7 @@ class DiskRule(Rule):
                                  "read": new_disk_info.read_bytes - old_disk_info.read_bytes,
                                  "write": new_disk_info.write_bytes - old_disk_info.write_bytes,
                                  "iops": new_disk_info.read_count+new_disk_info.write_count
-                                - old_disk_info.read_count+old_disk_info.write_count,
+                                - old_disk_info.read_count-old_disk_info.write_count,
                                  "total": new_disk_info.read_bytes - old_disk_info.read_bytes
                                 + new_disk_info.write_bytes - old_disk_info.write_bytes
                                  })

@@ -27,6 +27,7 @@ class Rule():
         self.msgs = []
         self.system = platform.system()
         self.is_root = self.check_admin()
+        self.pid = os.getpid()
 
     def stat(self):
         return {}
@@ -134,6 +135,8 @@ class CPURule(Rule):
         cpu_usage_list = []
         for p in psutil.process_iter():
             pid = p.pid
+            if pid == self.pid:
+                continue
             name = self.get_proc_name(p)
             cpu_percentage = p.cpu_percent(interval=None)
             cpu_usage_list.append({"pid": pid, "name": name, "cpu": cpu_percentage})
@@ -177,7 +180,7 @@ class MemRule(Rule):
 (>= {_percent_value(self.mem_load_warn)})")
 
     def get_top_proc(self):
-        mem_usage_list = [p for p in psutil.process_iter()]
+        mem_usage_list = [p for p in psutil.process_iter() if p.pid != self.pid]
         mem_usage_list.sort(key=lambda p: p.memory_info().rss, reverse=True)
 
         for p in mem_usage_list[:min(self.mem_proc_top_k, len(mem_usage_list))]:
@@ -380,6 +383,8 @@ class DiskRule(Rule):
 
         disk_io_diff = []
         for p in psutil.process_iter():
+            if self.pid == p.pid:
+                continue
             if p.pid not in disk_usage_list_old:
                 continue
             old_io = disk_usage_list_old[p.pid]
@@ -548,7 +553,7 @@ class ConnRule(Rule):
     def get_top_proc(self):
         if self.system in ["Linux", "Darwin"] and not self.is_root:
             return
-        net_usage_list = [p for p in psutil.process_iter()]
+        net_usage_list = [p for p in psutil.process_iter() if self.pid != p.pid]
         net_usage_list.sort(key=lambda p: len(p.connections()) if p.connections() is not None else 0, reverse=True)
 
         for p in net_usage_list[:min(self.net_proc_top_k, len(net_usage_list))]:

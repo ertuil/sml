@@ -63,5 +63,12 @@ mail_smtp = ""                  # SMTP server domain
 mail_tls = True                 # SMTP with TLS (default port 465)
 mail_to = [""]                  # SMTP receiver list
 
+
+# telegram bot relay server (for China mainland)
+# see https://gist.github.com/ertuil/6105c5888fffcb6bc548ffbb2a0560e5
 tg_server = ""                  # tg bot notifier, enabled if bot relay server is specified
-tg_secret = ""                  # tg bot secret, see https://gist.github.com/ertuil/6105c5888fffcb6bc548ffbb2a0560e5
+tg_secret = ""                  # tg relay server bot secret
+
+# telegram original API
+tg_botid = ""                   # telegram bot id
+tg_chatid = ""                  # telegram chat id

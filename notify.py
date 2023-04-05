@@ -5,9 +5,10 @@ from email.header import Header
 from smtplib import SMTP_SSL, SMTP
 import requests
 import socket
+import traceback
 
 from config import mail_from, mail_password, mail_tls, mail_smtp, mail_to,\
-                   tg_server, tg_secret, log_interval, log_reserve
+                   tg_server, tg_secret, log_interval, log_reserve, tg_botid, tg_chatid
 
 
 class Notifier():
@@ -133,14 +134,19 @@ class MailNotifier(Notifier):
         sender.ehlo(self.mail_smtp)
         sender.login(self.mail_from, self.mail_pass)
 
-        message = "\r\n".join(mail_msgs)
-        msg = MIMEText(message, "plain", 'utf-8')
-        msg["Subject"] = Header(mail_title, 'utf-8')
-        msg["From"] = mail_from
-        msg["To"] = ",".join(mail_to)
+        try:
+            message = "\r\n".join(mail_msgs)
+            msg = MIMEText(message, "plain", 'utf-8')
+            msg["Subject"] = Header(mail_title, 'utf-8')
+            msg["From"] = mail_from
+            msg["To"] = ",".join(mail_to)
 
-        sender.sendmail(mail_from, mail_to, msg.as_string())
-        sender.quit()
+            sender.sendmail(mail_from, mail_to, msg.as_string())
+            sender.quit()
+        except Exception as e:
+            if self.debug:
+                traceback.print_exc()
+            warn_msgs.append({"level": "critical", "msg": f"send mail failed ({e})"})
 
 
 class TgNotifier(Notifier):
@@ -148,6 +154,28 @@ class TgNotifier(Notifier):
         super().__init__(name=name, host=host, debug=debug)
         self.tg_server = tg_server
         self.tg_secret = tg_secret
+        self.tg_chatid = tg_chatid
+        self.tg_botid = tg_botid
+
+        if self.tg_server is not None and self.tg_server != "":
+            self.relay = True
+        elif self.tg_chatid != "" and self.tg_botid != "":
+            self.relay = False
+        else:
+            raise Exception("sml: either tg_chatid or tg_server needs to be determined")
+
+    def tg_send_msg(self, msg, warn_msgs):
+        try:
+            if self.relay:
+                requests.post(self.tg_server, data={"secret": self.tg_secret, "message": msg}).raise_for_status()
+            else:
+                url = "https://api.telegram.org/bot" + tg_botid + "/sendMessage"
+                data = {"chat_id": self.tg_chatid, "text": msg}
+                requests.post(url, data=data, timeout=10).raise_for_status()
+        except Exception as e:
+            if self.debug:
+                traceback.print_exc()
+            warn_msgs.append({"level": "critical", "msg": f"send telegram message failed ({e})"})
 
     def emit(self, current_time: str, warn_msgs: List[str], stat: any):
 
@@ -189,7 +217,7 @@ class TgNotifier(Notifier):
             return
 
         message = "\n".join(tg_msgs)
-        requests.post(self.tg_server, data={"secret": self.tg_secret, "message": message})
+        self.tg_send_msg(message, warn_msgs)
 
         tg_msgs.clear()
         if self.debug:
@@ -198,4 +226,4 @@ class TgNotifier(Notifier):
                 if msg["level"] == "debug":
                     tg_msgs.append(msg["msg"])
             message = "\n".join(tg_msgs)
-            requests.post(self.tg_server, data={"secret": self.tg_secret, "message": message})
+            self.tg_send_msg(message, warn_msgs)

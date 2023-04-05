@@ -43,14 +43,18 @@ class Rule():
             s = self.stat()
             self.check(s)
         except Exception as e:
-            traceback.print_exc()
+            if self.debug:
+                traceback.print_exc()
             self.critical("core", f"run monitor error: {e}")
+            return {}, self.msgs
         try:
             if len(self.msgs) > 0:
                 self.get_top_proc()
         except Exception as e:
-            traceback.print_exc()
+            if self.debug:
+                traceback.print_exc()
             self.critical("core", f"enumerate processes error: {e}")
+            return s, self.msgs
         if self.debug:
             self.debug_stat(s)
         return s, self.msgs
@@ -297,8 +301,6 @@ class DiskRule(Rule):
         return disk_stat
 
     def check(self, stat: dict):
-        if self.system in ["Linux", "Darwin"] and not self.is_root:
-            return
         for disk_name in self.existed_disks:
             # check smart
             smart_result = stat.get(f"{disk_name}-SMART", None)
@@ -345,6 +347,8 @@ class DiskRule(Rule):
                 self.warning(disk_name, f"{disk_iops} iops (>= {disk_iops_warn} iops)")
 
     def get_top_proc(self):
+        if self.system in ["Linux", "Darwin"] and not self.is_root:
+            return
         disk_usage_list_old = {p.pid: p for p in psutil.process_iter()}
         time.sleep(self.disk_interval)
         disk_usage_list_new = {p.pid: p for p in psutil.process_iter()}

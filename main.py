@@ -1,6 +1,6 @@
 import platform
 import traceback
-from config import host, debug, log_file, mail_from, tg_server, interval
+from config import host, debug, log_file, mail_from, tg_server, interval, tg_botid
 from rules import CPURule, MemRule, FSRule, NetRule, ListenRule, TempRule,\
       ConnRule, DiskRule, DockerRule
 from notify import LogNotifier, MailNotifier, TgNotifier
@@ -68,14 +68,21 @@ def single(notifiers=None):
 
 
 def init_notifiers():
-    notifiers = [LogNotifier(name="stdio", host=host, debug=debug, log_file="")]
+    notifiers = []
     if log_file is not None and log_file != "":
         notifiers.append(LogNotifier(debug=debug, host=host, log_file=log_file))
 
     if mail_from is not None and mail_from != "":
         notifiers.append(MailNotifier(debug=debug, host=host))
+
     if tg_server is not None and tg_server != "":
         notifiers.append(TgNotifier(debug=debug, host=host))
+    elif tg_botid is not None and tg_botid != "":
+        notifiers.append(TgNotifier(debug=debug, host=host))
+
+    if log_file is not None and log_file != "":
+        notifiers.append(LogNotifier(debug=debug, host=host, log_file=log_file))
+    notifiers.append(LogNotifier(name="stdio", host=host, debug=debug, log_file=""))
     return notifiers
 
 

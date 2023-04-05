@@ -59,9 +59,8 @@ class Rule():
         pass
 
     def get_proc_name(self, process: psutil.Process):
-        if self.system != "Windows" or self.is_root:
-            if process.cmdline() is not None and len(process.cmdline()) > 0:
-                return " ".join(process.cmdline())
+        if self.system != "Windows" and process.cmdline() is not None and len(process.cmdline()) > 0:
+            return " ".join(process.cmdline())
         if process.name() != "":
             return process.name()
         return process.exe()

@@ -25,6 +25,8 @@ class Rule():
         self.debug = debug
 
         self.msgs = []
+        self.system = platform.system()
+        self.is_root = self.check_admin()
 
     def stat(self):
         return {}
@@ -41,11 +43,13 @@ class Rule():
             s = self.stat()
             self.check(s)
         except Exception as e:
+            traceback.print_exc()
             self.critical("core", f"run monitor error: {e}")
         try:
             if len(self.msgs) > 0:
                 self.get_top_proc()
         except Exception as e:
+            traceback.print_exc()
             self.critical("core", f"enumerate processes error: {e}")
         if self.debug:
             self.debug_stat(s)
@@ -55,11 +59,23 @@ class Rule():
         pass
 
     def get_proc_name(self, process: psutil.Process):
-        if len(process.cmdline()) > 0:
-            return " ".join(process.cmdline())
+        if self.system != "Windows" or self.is_root:
+            if process.cmdline() is not None and len(process.cmdline()) > 0:
+                return " ".join(process.cmdline())
         if process.name() != "":
             return process.name()
         return process.exe()
+    
+    def check_admin(self):
+        is_root = False
+        if platform.system() in ["Linux", "Darwin"]:
+            if os.getuid() == 0:
+                is_root = True
+        if platform.system() == "Windows":
+            import ctypes
+            if ctypes.windll.shell32.IsUserAnAdmin():
+                is_root = True
+        return is_root
 
     def _clear_msgs(self):
         self.msgs.clear()
@@ -282,6 +298,8 @@ class DiskRule(Rule):
         return disk_stat
 
     def check(self, stat: dict):
+        if self.system in ["Linux", "Darwin"] and not self.is_root:
+            return
         for disk_name in self.existed_disks:
             # check smart
             smart_result = stat.get(f"{disk_name}-SMART", None)
@@ -493,6 +511,8 @@ class ConnRule(Rule):
             self.warning("udp conn", f"{udp_conn} (>= {self.net_conn_warn})")
 
     def get_top_proc(self):
+        if self.system in ["Linux", "Darwin"] and not self.is_root:
+            return
         net_usage_list = [p for p in psutil.process_iter()]
         net_usage_list.sort(key=lambda p: len(p.connections()) if p.connections() is not None else 0, reverse=True)
 

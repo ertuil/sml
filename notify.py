@@ -7,7 +7,7 @@ import requests
 import socket
 import traceback
 
-from config import mail_from, mail_password, mail_tls, mail_smtp, mail_to,\
+from config import mail_from, mail_password, mail_tls, mail_smtp, mail_to, log_file,\
                    tg_server, tg_secret, log_interval, log_reserve, tg_botid, tg_chatid
 
 
@@ -25,8 +25,9 @@ class Notifier():
 
 
 class LogNotifier(Notifier):
-    def __init__(self, name: str = "log", host: str = "", debug: bool = False, log_file: str = ""):
+    def __init__(self, name: str = "log", host: str = "", debug: bool = False):
         super().__init__(name=name, host=host, debug=debug)
+
         self.log_file = log_file
         self.log_interval = log_interval
         self.log_reserve = log_reserve if log_reserve is None or log_reserve <= 0 else 1
@@ -36,19 +37,24 @@ class LogNotifier(Notifier):
             logger.setLevel(logging.DEBUG)
         else:
             logger.setLevel(logging.INFO)
-        if self.log_file is None or self.log_file == "":
-            fh = logging.StreamHandler()
-        elif self.log_interval is not None and self.log_interval > 0:
-            from logging import handlers
-            fh = handlers.TimedRotatingFileHandler(self.log_file, when="D", interval=self.log_interval,
-                                                   backupCount=self.log_reserve, encoding="utf-8")
-        else:
-            fh = logging.FileHandler(log_file, "a", encoding="utf-8")
+
         LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
         DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
         fm = logging.Formatter(fmt=LOG_FORMAT, datefmt=DATE_FORMAT)
-        fh.setFormatter(fm)
-        logger.addHandler(fh)
+
+        sh = logging.StreamHandler()
+        sh.setFormatter(fm)
+        logger.addHandler(sh)
+
+        if self.log_file is not None and self.log_file != "":
+            if self.log_interval is not None and self.log_interval > 0:
+                from logging import handlers
+                fh = handlers.TimedRotatingFileHandler(self.log_file, when="D", interval=self.log_interval,
+                                                       backupCount=self.log_reserve, encoding="utf-8")
+            else:
+                fh = logging.FileHandler(log_file, "a", encoding="utf-8")
+            fh.setFormatter(fm)
+            logger.addHandler(fh)
         self.logger = logger
 
     def emit(self, current_time: str, warn_msgs: List[Dict[str, str]], stat: any):

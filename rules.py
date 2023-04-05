@@ -131,12 +131,16 @@ class CPURule(Rule):
             p.cpu_percent(interval=None)
 
         time.sleep(self.cpu_interval)
-        cpu_usage_list = [p for p in psutil.process_iter()
-                          if "idle" not in p.name().lower()]
-        cpu_usage_list.sort(key=lambda p: p.cpu_percent(), reverse=True)
+        cpu_usage_list = []
+        for p in psutil.process_iter():
+            pid = p.pid
+            name = self.get_proc_name(p)
+            cpu_percentage = p.cpu_percent(interval=None)
+            cpu_usage_list.append({"pid": pid, "name": name, "cpu": cpu_percentage})
+        cpu_usage_list.sort(key=lambda p: p["cpu"], reverse=True)
 
         for p in cpu_usage_list[:min(self.cpu_proc_top_k, len(cpu_usage_list))]:
-            self.info("proc", f"id: {p.pid} {self.get_proc_name(p)} (CPU {_percent_value(p.cpu_percent()/cpu_core)})")
+            self.info("proc", f"id: {p['pid']} {p['name']} (*CPU {_percent_value(p['cpu']/cpu_core)})")
 
 
 class MemRule(Rule):
@@ -178,7 +182,7 @@ class MemRule(Rule):
 
         for p in mem_usage_list[:min(self.mem_proc_top_k, len(mem_usage_list))]:
             self.info("proc", f"id: {p.pid} {self.get_proc_name(p)} \
-(rss: {_byte_value(p.memory_info().rss)}, vms: {_byte_value(p.memory_info().vms)})")
+(*rss: {_byte_value(p.memory_info().rss)}, vms: {_byte_value(p.memory_info().vms)})")
 
 
 class FSRule(Rule):
@@ -251,6 +255,9 @@ class DiskRule(Rule):
         self.existed_disks = []
         self.disk_proc_top_k = 3
 
+        self.warn_iops = False
+        self.warn_bytes = False
+
         if platform.system() == "Windows":
             os.system("diskperf -y")
 
@@ -301,6 +308,9 @@ class DiskRule(Rule):
         return disk_stat
 
     def check(self, stat: dict):
+        self.warn_bytes = False
+        self.warn_iops = False
+
         for disk_name in self.existed_disks:
             # check smart
             smart_result = stat.get(f"{disk_name}-SMART", None)
@@ -320,64 +330,86 @@ class DiskRule(Rule):
             if self.disk_read_critical is not None and disk_read >= self.disk_read_critical:
                 self.critical(disk_name, f"read {_bps_value(disk_read)} \
 (>= {_bps_value(self.disk_read_critical)})")
+                self.warn_bytes = True
             elif self.disk_read_warn is not None and disk_read >= self.disk_read_warn:
                 self.warning(disk_name, f"read {_bps_value(disk_read)} \
 (>= {_bps_value(self.disk_read_warn)})")
+                self.warn_bytes = True
 
             # write bytes
             if self.disk_write_critical is not None and disk_write >= self.disk_write_critical:
                 self.critical(disk_name, f"write {_bps_value(disk_write)} \
 (>= {_bps_value(self.disk_write_critical)})")
+                self.warn_bytes = True
             elif self.disk_write_warn is not None and disk_write >= self.disk_write_warn:
                 self.warning(disk_name, f"write {_byte_value(disk_write)} \
 (>= {_byte_value(self.disk_write_warn)})")
+                self.warn_bytes = True
 
             # busy time percent
             if self.disk_io_time_critical is not None and disk_time >= self.disk_io_time_critical:
                 self.critical(disk_name, f"io {_percent_value(disk_time)} \
 (>= {_percent_value(self.disk_io_time_critical)})")
+                self.warn_iops = True
             elif self.disk_io_time_warn is not None and disk_time >= self.disk_io_time_warn:
                 self.warning(disk_name, f"io {_percent_value(disk_time)} \
 (>= {_percent_value(self.disk_io_time_warn)})")
+                self.warn_iops = True
 
             # iops
             if self.disk_iops_critical is not None and disk_iops >= self.disk_iops_critical:
                 self.critical(disk_name, f"{disk_iops} iops (>= {self.disk_iops_critical} iops)")
+                self.warn_iops = True
             elif self.disk_iops_warn is not None and disk_iops >= self.disk_iops_warn:
                 self.warning(disk_name, f"{disk_iops} iops (>= {disk_iops_warn} iops)")
+                self.warn_iops = True
 
     def get_top_proc(self):
         if self.system in ["Linux", "Darwin"] and not self.is_root:
             return
-        disk_usage_list_old = {p.pid: p for p in psutil.process_iter()}
+
+        disk_usage_list_old = {}
+        for p in psutil.process_iter():
+            old_io = p.io_counters()
+            if old_io is None:
+                continue
+            disk_usage_list_old[p.pid] = old_io
+
         time.sleep(self.disk_interval)
-        disk_usage_list_new = {p.pid: p for p in psutil.process_iter()}
+        # disk_usage_list_new = {p.pid: p for p in psutil.process_iter()}
 
         disk_io_diff = []
-        for pid, new_process in disk_usage_list_new.items():
-            if pid not in disk_usage_list_old:
+        for p in psutil.process_iter():
+            if p.pid not in disk_usage_list_old:
                 continue
-            old_process = disk_usage_list_old[pid]
-            if new_process.io_counters() is None or old_process.io_counters() is None:
+            old_io = disk_usage_list_old[p.pid]
+            new_io = p.io_counters()
+            if new_io is None:
                 continue
-            name = self.get_proc_name(new_process)
-            new_disk_info = new_process.io_counters()
-            old_disk_info = old_process.io_counters()
-            disk_io_diff.append({"pid": pid,
-                                 "name": name,
-                                 "read": new_disk_info.read_bytes - old_disk_info.read_bytes,
-                                 "write": new_disk_info.write_bytes - old_disk_info.write_bytes,
-                                 "iops": new_disk_info.read_count+new_disk_info.write_count
-                                - old_disk_info.read_count-old_disk_info.write_count,
-                                 "total": new_disk_info.read_bytes - old_disk_info.read_bytes
-                                + new_disk_info.write_bytes - old_disk_info.write_bytes
+
+            disk_io_diff.append({"pid": p.pid,
+                                 "name": self.get_proc_name(p),
+                                 "read": new_io.read_bytes - old_io.read_bytes,
+                                 "write": new_io.write_bytes - old_io.write_bytes,
+                                 "iops": new_io.read_count+new_io.write_count
+                                - old_io.read_count-old_io.write_count,
+                                 "total": new_io.read_bytes - old_io.read_bytes
+                                + new_io.write_bytes - old_io.write_bytes
                                  })
 
-        disk_io_diff.sort(key=lambda p: p["total"], reverse=True)
+        if self.warn_bytes:
+            disk_io_diff.sort(key=lambda p: p["total"], reverse=True)
 
-        for p in disk_io_diff[:min(self.disk_proc_top_k, len(disk_io_diff))]:
-            self.info("proc", f"id: {p['pid']} {p['name']} \
-(read {_bps_value(p['read'])}, write {_bps_value(p['write'])}, {p['iops']} iops)")
+            for p in disk_io_diff[:min(self.disk_proc_top_k, len(disk_io_diff))]:
+                self.info("proc", f"id: {p['pid']} {p['name']} \
+    (*total: {_bps_value(p['total'])},read {_bps_value(p['read'])}, write {_bps_value(p['write'])}, {p['iops']} iops)")
+
+        if self.warn_iops:
+            disk_io_diff.sort(key=lambda p: p["iops"], reverse=True)
+
+            for p in disk_io_diff[:min(self.disk_proc_top_k, len(disk_io_diff))]:
+                self.info("proc", f"id: {p['pid']} {p['name']} \
+    (*{p['iops']} iops, read {_bps_value(p['read'])}, write {_bps_value(p['write'])})")
 
 
 class NetRule(Rule):
@@ -521,7 +553,7 @@ class ConnRule(Rule):
 
         for p in net_usage_list[:min(self.net_proc_top_k, len(net_usage_list))]:
             self.info("proc", f"id {p.pid} {self.get_proc_name(p)} \
-(connection: {len(p.connections())})")
+(*connection: {len(p.connections())})")
 
 
 class TempRule(Rule):

@@ -71,7 +71,9 @@ class Rule():
             process_name = process.name()
         else:
             process_name = process.exe()
-        return process_name[:min(128, len(process_name))]
+        if len(process_name) > 128:
+            process_name = process_name[:125] + "..."
+        return process_name
 
     def check_admin(self):
         is_root = False

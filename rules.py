@@ -18,6 +18,11 @@ from config import cpu_load_warn, cpu_load_critical, cpu_interval, mem_load_warn
                 disk_filter, disk_usage_critical, disk_iops_critical, disk_iops_warn, disk_read_critical,\
                 disk_read_warn, disk_write_warn, disk_interval, docker_url, docker_watch_containers
 
+try:
+    from config import net_max_bandwidth
+except ImportError:
+    net_max_bandwidth = 1000
+
 
 class Rule():
     def __init__(self, name: str, debug: bool = False):
@@ -445,6 +450,7 @@ class NetRule(Rule):
         self.net_pps_critical = net_pps_critical
         self.net_filter = net_filter
         self.interval = net_interval
+        self.net_max_bandwidth = net_max_bandwidth
 
         self.count_ifaces = []
 
@@ -473,15 +479,15 @@ class NetRule(Rule):
                     if if_stat.duplex == psutil.NIC_DUPLEX_HALF:
                         mul = 0.5
                     speed = if_stat.speed
-                    if speed == 0:
+                    if speed == 0 or speed > self.net_max_bandwidth:
                         # support default is 1 GBps
-                        speed = 1000 * self.mbps_multipler * mul
+                        speed = self.net_max_bandwidth * self.mbps_multipler * mul
                     else:
                         speed = speed * self.mbps_multipler * mul
                     net_stat[f"{iface}-max"] = speed
                 else:
                     # support default is 1 GBps
-                    net_stat[f"{iface}-max"] = 1000 * self.mbps_multipler
+                    net_stat[f"{iface}-max"] = self.net_max_bandwidth * self.mbps_multipler
 
         # first count
         old_stat = {}
@@ -529,14 +535,18 @@ class NetRule(Rule):
                 continue
 
             if self.net_io_critical is not None and send_bps >= self.net_io_critical * speed:
-                self.critical(iface, f"send {_bps_value(send_bps)} (>= {self.net_io_critical}x {_bps_value(speed)})")
+                self.critical(iface, f"send {_bps_value(send_bps)} (>= {self.net_io_critical}x {_bps_value(speed)} \
+= {_bps_value(self.net_io_critical*speed)})")
             elif self.net_io_warn is not None and send_bps >= self.net_io_warn * speed:
-                self.warning(iface, f"send {_bps_value(send_bps)} (>= {self.net_io_warn}x {_bps_value(speed)})")
+                self.warning(iface, f"send {_bps_value(send_bps)} (>= {self.net_io_warn}x {_bps_value(speed)} \
+= {_bps_value(self.net_io_warn*speed)})")
 
             if self.net_io_critical is not None and recv_bps >= self.net_io_critical * speed:
-                self.critical(iface, f"recv {_bps_value(recv_bps)} (>= {self.net_io_critical}x {_bps_value(speed)})")
+                self.critical(iface, f"recv {_bps_value(recv_bps)} (>= {self.net_io_critical}x {_bps_value(speed)} \
+= {_bps_value(self.net_io_critical*speed)})")
             elif self.net_io_warn is not None and recv_bps >= self.net_io_warn * speed:
-                self.warning(iface, f"recv {_bps_value(recv_bps)} (>= {self.net_io_warn}x {_bps_value(speed)})")
+                self.warning(iface, f"recv {_bps_value(recv_bps)} (>= {self.net_io_warn}x {_bps_value(speed)} \
+= {_bps_value(self.net_io_warn*speed)})")
 
             if self.net_pps_critical is not None and send_pps >= self.net_pps_critical:
                 self.critical(iface, f"send {send_pps} pps (>= {self.net_pps_critical} pps)")

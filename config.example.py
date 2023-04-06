@@ -35,6 +35,7 @@ net_pps_warn = 60000            # warning network send rate, >= 60000 pps
 net_pps_critical = 80000        # critical network send rate, >= 80000 pps
 net_filter = None               # collect information only on selected nic(s), e.g., net_filter = ["lo", "eth0"]
 net_interval = 5                # collect network information within 5 second(s)
+net_max_bandwidth = 1000        # network max bandwidth, 1000 Mbps
 
 temp_cpu_warn = 70              # warning CPU temperature, >= 70 Celsius
 temp_disk_warn = 40             # warning disk temperature, >= 40 Celsius

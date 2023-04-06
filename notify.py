@@ -131,9 +131,10 @@ class MailNotifier(Notifier):
                 if msg["level"] == "debug":
                     mail_msgs.append(msg["msg"])
 
-        sender = SMTP(self.mail_smtp)
         if self.mail_tls:
             sender = SMTP_SSL(self.mail_smtp)
+        else:
+            sender = SMTP(self.mail_smtp)
         if not self.debug:
             sender.set_debuglevel(0)
 

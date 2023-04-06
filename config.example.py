@@ -4,46 +4,46 @@ host = ""                       # the node's name, default use the hostname
 interval = 0                    # collect information periodically (in seconds)
 
 # ===== monitor settings =====
-cpu_load_warn = 0.7             # warning CPU load, >= 70%
-cpu_load_critical = 0.95        # critical CPU load, >= 95%
-cpu_interval = 5                # measure CPU load within 1 second(s)
+cpu_load_warn = 0.72            # warning CPU load, >= 72%
+cpu_load_critical = 0.90        # critical CPU load, >= 90%
+cpu_interval = 5                # measure CPU load within 5 second(s)
 
-mem_load_warn = 0.7             # warning memory usage, >= 70%
-mem_load_critical = 0.95        # critical memory usage, >= 95%
+mem_load_warn = 0.72            # warning memory usage, >= 72%
+mem_load_critical = 0.90        # critical memory usage, >= 90%
 
-fs_usage_warn = 0.7             # warning filesystem usage, >= 70%
+fs_usage_warn = 0.72            # warning filesystem usage, >= 72%
 fs_usage_critical = 0.9         # critical filesystem usage, >= 90%
 fs_filter = None                # collect information on selected filesystem, e.g., fs_filter = ["/dev/sda1"]
 
-disk_read_warn = 80             # warning disk read rate, >= 200 Mbps
-disk_write_warn = 80            # warning disk write rate, >= 200 Mbps
-disk_read_critical = 100        # critical disk read rate, >= 200 Mbps
-disk_write_critical = 100       # critical disk write rate, >= 200 Mbps
-disk_iops_warn = 80             # warning disk iops, >= 3000 iops
-disk_iops_critical = 100        # critical disk iops, >= 5000 iops
-disk_io_time_warn = 0.5         # warning disk busy time, >= 50%
-disk_io_time_critical = 0.7     # critical disk busy time, >= 70%
+disk_read_warn = 100            # warning disk read rate, >= 100 Mbps (default value for SATA HDD)
+disk_write_warn = 100           # warning disk write rate, >= 100 Mbps
+disk_read_critical = 125        # critical disk read rate, >= 125 Mbps
+disk_write_critical = 125       # critical disk write rate, >= 125 Mbps
+disk_iops_warn = 300            # warning disk iops, >= 3000 iops
+disk_iops_critical = 500        # critical disk iops, >= 5000 iops
+disk_io_time_warn = 0.55        # warning disk busy time, >= 56%
+disk_io_time_critical = 0.70    # critical disk busy time, >= 70%
 disk_filter = None              # collect information on selected disk, e.g., fs_filter = ["/dev/sda"]
-disk_interval = 5               # collect network information within 1 second(s)
+disk_interval = 5               # collect network information within 5 second(s)
 
-net_conn_warn = 5000            # warning number of net connections, >= 10000
-net_conn_critical = 10000       # critical number of net connections, >= 300000
+net_conn_warn = 5000            # warning number of net connections, >= 5000
+net_conn_critical = 10000       # critical number of net connections, >= 10000
 
-net_send_warn = 200             # warning network send rate, >= 200 Mbps
-net_recv_warn = 200             # warning network recv rate, >= 200 Mbps
-net_bps_critical = 800          # critical network rate, >= 800 Mbps
-net_send_packet_warn = 60000    # warning network send rate, >= 80000 pps
-net_recv_packet_warn = 60000    # warning network recv rate, >= 80000 pps
+net_send_warn = 720             # warning network send rate, >= 720 Mbps (default value for 1Gbps Network)
+net_recv_warn = 720             # warning network recv rate, >= 720 Mbps
+net_bps_critical = 900          # critical network rate, >= 900 Mbps
+net_send_packet_warn = 60000    # warning network send rate, >= 60000 pps
+net_recv_packet_warn = 60000    # warning network recv rate, >= 60000 pps
 net_pps_critical = 80000        # critical network send rate, >= 80000 pps
 net_filter = None               # collect information only on selected nic(s), e.g., net_filter = ["lo", "eth0"]
-net_interval = 5                # collect network information within 1 second(s)
+net_interval = 5                # collect network information within 5 second(s)
 
 temp_cpu_warn = 70              # warning CPU temperature, >= 70 Celsius
 temp_disk_warn = 40             # warning disk temperature, >= 40 Celsius
-temp_warn_percent = 0.7         # warning misc temperature, >= 70% critical temperature (if exists)
+temp_warn_percent = 0.72        # warning misc temperature, >= 72% critical temperature (if exists)
 temp_cpu_critical = 80          # critical CPU temperature, >= 80 Celsius
 temp_disk_critical = 50         # warning disk temperature, >= 50 Celsius
-temp_critical_percent = 0.8     # warning misc temperature, >= 80% critical temperature (if exists)
+temp_critical_percent = 0.9     # warning misc temperature, >= 90% critical temperature (if exists)
 
 
 listen_map = []                 # watch listen TCP/UDP sockets, e.g., listen_map = [("dns", "udp", 53)]

@@ -163,8 +163,8 @@ class MemRule(Rule):
         mem_usage = virtual_mem.percent / 100
         mem_stat = {"total": mem_total, "used": mem_used, "free": mem_free, "usage": mem_usage}
         if platform.system() == "Linux":
-            mem_stat["buffer"] = virtual_mem.buffers
-            mem_stat["cache"] = virtual_mem.cached
+            mem_stat["buffer"] = _byte_value(virtual_mem.buffers)
+            mem_stat["cache"] = _byte_value(virtual_mem.cached)
         return mem_stat
 
     def check(self, stat: dict):
@@ -216,6 +216,7 @@ class FSRule(Rule):
                 fs_stat[f"{disk.device}-free"] = disk_free
                 fs_stat[f"{disk.device}-usage"] = disk_percent
                 counted_device.append(disk.device)
+
         return fs_stat
 
     def check(self, stat: dict):
@@ -238,6 +239,11 @@ class FSRule(Rule):
             elif usage >= self.fs_usage_warn:
                 self.warning(device_name, f"{_percent_value(usage)} \
 (>= {_percent_value(self.fs_usage_warn)}, {used}/{total})")
+
+        if self.fs_filter is not None:
+            for test_fs in self.fs_filter:
+                if test_fs not in counted_device:
+                    self.warning(test_fs, "filesystem not found")
 
 
 class DiskRule(Rule):
@@ -267,6 +273,8 @@ class DiskRule(Rule):
     def stat(self):
         disk_stat = {}
         self.existed_disks.clear()
+        self.warn_iops = False
+        self.warn_bytes = False
 
         disk_old = psutil.disk_io_counters(perdisk=True, nowrap=True)
         if disk_old is None or len(disk_old) == 0:
@@ -313,6 +321,11 @@ class DiskRule(Rule):
     def check(self, stat: dict):
         self.warn_bytes = False
         self.warn_iops = False
+
+        if self.disk_filter is not None:
+            for disk in self.disk_filter:
+                if disk not in self.existed_disks:
+                    self.warning(disk, "disk not found")
 
         for disk_name in self.existed_disks:
             # check smart
@@ -481,6 +494,11 @@ class NetRule(Rule):
         return net_stat
 
     def check(self, net_stat: dict):
+        if isinstance(self.net_filter, list):
+            for iface in self.net_filter:
+                if iface not in self.count_ifaces:
+                    self.warning(iface, "network interface not found")
+
         for iface in self.count_ifaces:
             try:
                 send_bps = net_stat[f"{iface}-send-bps"]
@@ -612,16 +630,19 @@ class ListenRule(Rule):
     def __init__(self, name: str = "listen", debug: bool = False):
         super().__init__(name, debug)
         self.listen_map = {}
-        for r in listen_map:
-            try:
-                name = r[0]
-                protocol = r[1]
-                port = r[2]
-                key = f"{protocol}{port}"
-                self.listen_map[key] = {"name": name, "port": port, "protocol": protocol, "checked": False}
-            except Exception:
-                traceback.print_exc()
-                continue
+        if listen_map is None:
+            for r in listen_map:
+                try:
+                    name = r[0]
+                    protocol = r[1]
+                    port = r[2]
+                    key = f"{protocol}{port}"
+                    self.listen_map[key] = {"name": name, "port": port, "protocol": protocol, "checked": False}
+                except Exception as e:
+                    if self.debug:
+                        traceback.print_exc()
+                    print(f"load listen rules failed, {e}")
+                    continue
 
     def stat(self):
         listen_stat = {}
@@ -667,7 +688,7 @@ class DockerRule(Rule):
         if self.docker_watch_containers is None or len(self.docker_watch_containers) == 0:
             return docker_stat
 
-        if self.docker_url is not None and self.docker_url != "":
+        if isinstance(self.docker_url, str) and self.docker_url != "":
             client = docker.DockerClient(base_url=self.docker_url)
         else:
             client = docker.from_env()

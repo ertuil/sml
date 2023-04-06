@@ -412,12 +412,12 @@ class DiskRule(Rule):
 
             disk_io_diff.append({"pid": p.pid,
                                  "name": self.get_proc_name(p),
-                                 "read": new_io.read_bytes - old_io.read_bytes,
-                                 "write": new_io.write_bytes - old_io.write_bytes,
-                                 "iops": new_io.read_count+new_io.write_count
-                                - old_io.read_count-old_io.write_count,
-                                 "total": new_io.read_bytes - old_io.read_bytes
-                                + new_io.write_bytes - old_io.write_bytes
+                                 "read": (new_io.read_bytes - old_io.read_bytes)/self.disk_interval,
+                                 "write": (new_io.write_bytes - old_io.write_bytes)/disk_interval,
+                                 "iops": (new_io.read_count+new_io.write_count
+                                          - old_io.read_count-old_io.write_count)/self.disk_interval,
+                                 "total": (new_io.read_bytes - old_io.read_bytes
+                                           + new_io.write_bytes - old_io.write_bytes)/self.disk_interval
                                  })
 
         if self.warn_bytes:

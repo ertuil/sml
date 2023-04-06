@@ -189,7 +189,6 @@ class TgNotifier(Notifier):
                 idx += 1
             else:
                 msg = "\n".join(wait_msg_list)
-                print("debug", total, idx, msg)
                 self._tg_send_core(msg, warn_msgs)
                 wait_msg_list.clear()
                 wait_msg_len = 0
@@ -257,5 +256,4 @@ class TgNotifier(Notifier):
             for msg in warn_msgs:
                 if msg["level"] == "debug":
                     tg_msgs.append(msg["msg"])
-        print(tg_msgs)
         self.tg_send_msg(tg_msgs, warn_msgs)

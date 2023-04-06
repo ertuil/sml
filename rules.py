@@ -10,12 +10,12 @@ import os
 from utils import _bps_value, _byte_value, _percent_value, get_current_time
 from config import cpu_load_warn, cpu_load_critical, cpu_interval, mem_load_warn, mem_load_critical,\
                 fs_usage_warn, fs_usage_critical, fs_filter,\
-                net_send_warn, net_send_packet_warn, net_recv_warn, net_recv_packet_warn,\
-                net_bps_critical, net_pps_critical, net_filter, net_interval,\
+                net_io_warn, net_io_critical, net_pps_warn, net_pps_critical,\
+                net_filter, net_interval,\
                 temp_cpu_critical, temp_cpu_warn, temp_disk_critical, temp_disk_warn,\
                 temp_critical_percent, temp_warn_percent, listen_map,\
-                net_conn_warn, net_conn_critical, disk_io_time_warn, disk_write_critical,\
-                disk_filter, disk_io_time_critical, disk_iops_critical, disk_iops_warn, disk_read_critical,\
+                net_conn_warn, net_conn_critical, disk_usage_warn, disk_write_critical,\
+                disk_filter, disk_usage_critical, disk_iops_critical, disk_iops_warn, disk_read_critical,\
                 disk_read_warn, disk_write_warn, disk_interval, docker_url, docker_watch_containers
 
 
@@ -258,8 +258,8 @@ class DiskRule(Rule):
 
         self.disk_iops_critical = disk_iops_critical
         self.disk_iops_warn = disk_iops_warn
-        self.disk_io_time_warn = disk_io_time_warn
-        self.disk_io_time_critical = disk_io_time_critical
+        self.disk_usage_warn = disk_usage_warn
+        self.disk_usage_critical = disk_usage_critical
         self.disk_write_warn = disk_write_warn * self.disk_multipler
         self.disk_write_critical = disk_write_critical * self.disk_multipler
         self.disk_read_warn = disk_read_warn * self.disk_multipler
@@ -368,13 +368,13 @@ class DiskRule(Rule):
                 self.warn_bytes = True
 
             # busy time percent
-            if self.disk_io_time_critical is not None and disk_time >= self.disk_io_time_critical:
+            if self.disk_usage_critical is not None and disk_time >= self.disk_usage_critical:
                 self.critical(disk_name, f"busy {_percent_value(disk_time)} \
-(>= {_percent_value(self.disk_io_time_critical)})")
+(>= {_percent_value(self.disk_usage_critical)})")
                 self.warn_iops = True
-            elif self.disk_io_time_warn is not None and disk_time >= self.disk_io_time_warn:
+            elif self.disk_usage_warn is not None and disk_time >= self.disk_usage_warn:
                 self.warning(disk_name, f"busy {_percent_value(disk_time)} \
-(>= {_percent_value(self.disk_io_time_warn)})")
+(>= {_percent_value(self.disk_usage_warn)})")
                 self.warn_iops = True
 
             # iops
@@ -439,11 +439,9 @@ class NetRule(Rule):
     def __init__(self, name: str = "net", debug: bool = False):
         super().__init__(name, debug)
         self.mbps_multipler = 1024 * 1024
-        self.net_send_warn = net_send_warn * self.mbps_multipler
-        self.net_recv_warn = net_recv_warn * self.mbps_multipler
-        self.net_send_packet_warn = net_send_packet_warn
-        self.net_recv_packet_warn = net_recv_packet_warn
-        self.net_bps_critical = net_bps_critical * self.mbps_multipler
+        self.net_io_warn = net_io_warn
+        self.net_io_critical = net_io_critical
+        self.net_pps_warn = net_pps_warn
         self.net_pps_critical = net_pps_critical
         self.net_filter = net_filter
         self.interval = net_interval
@@ -457,6 +455,7 @@ class NetRule(Rule):
         psutil.net_io_counters.cache_clear()
 
         net_addr = psutil.net_if_addrs()
+        net_info = psutil.net_if_stats()
         for iface, addr_list in net_addr.items():
             if self.net_filter is None or iface in self.net_filter:
                 if iface not in self.count_ifaces:
@@ -468,6 +467,21 @@ class NetRule(Rule):
                         net_stat[f"{iface}-ipv4"] = addr.address
                     if addr.family == socket.AF_INET6:
                         net_stat[f"{iface}-ipv6"] = addr.address
+                if iface in net_info:
+                    if_stat = net_info[iface]
+                    mul = 1
+                    if if_stat.duplex == psutil.NIC_DUPLEX_HALF:
+                        mul = 0.5
+                    speed = if_stat.speed
+                    if speed == 0:
+                        # support default is 1 GBps
+                        speed = 1000 * self.mbps_multipler * mul
+                    else:
+                        speed = speed * self.mbps_multipler * mul
+                    net_stat[f"{iface}-max"] = speed
+                else:
+                    # support default is 1 GBps
+                    net_stat[f"{iface}-max"] = 1000 * self.mbps_multipler
 
         # first count
         old_stat = {}
@@ -510,28 +524,29 @@ class NetRule(Rule):
                 recv_bps = net_stat[f"{iface}-recv-bps"]
                 send_pps = net_stat[f"{iface}-send-pps"]
                 recv_pps = net_stat[f"{iface}-recv-pps"]
+                speed = net_stat[f"{iface}-max"]
             except KeyError:
                 continue
 
-            if self.net_bps_critical is not None and send_bps >= self.net_bps_critical:
-                self.critical(iface, f"send {_bps_value(send_bps)} (>= {_bps_value(self.net_bps_critical)})")
-            elif self.net_send_warn is not None and send_bps >= self.net_send_warn:
-                self.warning(iface, f"send {_bps_value(send_bps)} (>= {_bps_value(self.net_send_warn)})")
+            if self.net_io_critical is not None and send_bps >= self.net_io_critical * speed:
+                self.critical(iface, f"send {_bps_value(send_bps)} (>= {self.net_io_critical}x {_bps_value(speed)})")
+            elif self.net_io_warn is not None and send_bps >= self.net_io_warn * speed:
+                self.warning(iface, f"send {_bps_value(send_bps)} (>= {self.net_io_warn}x {_bps_value(speed)})")
 
-            if self.net_bps_critical is not None and recv_bps >= self.net_bps_critical:
-                self.critical(iface, f"recv {_bps_value(recv_bps)} (>= {_bps_value(self.net_bps_critical)})")
-            elif self.net_recv_warn is not None and recv_bps >= self.net_recv_warn:
-                self.warning(iface, f"recv {_bps_value(recv_bps)} (>= {_bps_value(self.net_recv_warn)})")
+            if self.net_io_critical is not None and recv_bps >= self.net_io_critical * speed:
+                self.critical(iface, f"recv {_bps_value(recv_bps)} (>= {self.net_io_critical}x {_bps_value(speed)})")
+            elif self.net_io_warn is not None and recv_bps >= self.net_io_warn * speed:
+                self.warning(iface, f"recv {_bps_value(recv_bps)} (>= {self.net_io_warn}x {_bps_value(speed)})")
 
             if self.net_pps_critical is not None and send_pps >= self.net_pps_critical:
                 self.critical(iface, f"send {send_pps} pps (>= {self.net_pps_critical} pps)")
-            elif self.net_send_packet_warn is not None and send_pps >= self.net_send_packet_warn:
-                self.warning(iface, f"send {send_pps} pps (>= {self.net_send_packet_warn} pps)")
+            elif self.net_pps_warn is not None and send_pps >= self.net_pps_warn:
+                self.warning(iface, f"send {send_pps} pps (>= {self.net_pps_warn} pps)")
 
             if self.net_pps_critical is not None and recv_pps >= self.net_pps_critical:
                 self.critical(iface, f"recv {recv_pps} pps (>= {self.net_pps_critical} pps)")
-            elif self.net_recv_packet_warn is not None and recv_pps >= self.net_recv_packet_warn:
-                self.warning(iface, f"recv {recv_pps} pps (>= {self.net_recv_packet_warn} pps)")
+            elif self.net_pps_warn is not None and recv_pps >= self.net_pps_warn:
+                self.warning(iface, f"recv {recv_pps} pps (>= {self.net_pps_warn} pps)")
 
 
 class ConnRule(Rule):

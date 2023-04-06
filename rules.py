@@ -630,7 +630,7 @@ class ListenRule(Rule):
     def __init__(self, name: str = "listen", debug: bool = False):
         super().__init__(name, debug)
         self.listen_map = {}
-        if listen_map is None:
+        if listen_map is not None:
             for r in listen_map:
                 try:
                     name = r[0]

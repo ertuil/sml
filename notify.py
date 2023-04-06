@@ -171,10 +171,37 @@ class TgNotifier(Notifier):
         else:
             raise Exception("sml: either tg_chatid or tg_server needs to be determined")
 
-    def tg_send_msg(self, msg, warn_msgs):
+    def tg_send_msg(self, msg_list, warn_msgs):
+
+        total = len(msg_list)
+        idx = 0
+        wait_msg_list = []
+        wait_msg_len = 0
+        self.failed = False
+        while idx < total:
+            current_msg = msg_list[idx]
+            if len(current_msg) >= 1020:
+                current_msg = current_msg[:1020] + "..."
+
+            if wait_msg_len + len(current_msg) <= 2048:
+                wait_msg_list.append(current_msg)
+                wait_msg_len += (len(current_msg) + 1)
+                idx += 1
+            else:
+                msg = "\n".join(wait_msg_list)
+                print("debug", total, idx, msg)
+                self._tg_send_core(msg, warn_msgs)
+                wait_msg_list.clear()
+                wait_msg_len = 0
+        if wait_msg_len > 0:
+            msg = "\n".join(wait_msg_list)
+            self._tg_send_core(msg, warn_msgs)
+
+    def _tg_send_core(self, msg, warn_msgs):
         try:
             if self.relay:
-                requests.post(self.tg_server, data={"secret": self.tg_secret, "message": msg}).raise_for_status()
+                requests.post(self.tg_server, data={"secret": self.tg_secret, "message": msg})\
+                    .raise_for_status()
             else:
                 url = "https://api.telegram.org/bot" + tg_botid + "/sendMessage"
                 data = {"chat_id": self.tg_chatid, "text": msg}
@@ -182,7 +209,9 @@ class TgNotifier(Notifier):
         except Exception as e:
             if self.debug:
                 traceback.print_exc()
-            warn_msgs.append({"level": "critical", "msg": f"send telegram message failed ({e})"})
+            if not self.failed:
+                warn_msgs.append({"level": "critical", "msg": f"send telegram message failed ({e})"})
+                self.failed = True
 
     def emit(self, current_time: str, warn_msgs: List[str], stat: any):
 
@@ -223,14 +252,10 @@ class TgNotifier(Notifier):
         if not need_emit:
             return
 
-        message = "\n".join(tg_msgs)
-        self.tg_send_msg(message, warn_msgs)
-
-        tg_msgs.clear()
         if self.debug:
             tg_msgs.append("\nDebug:")
             for msg in warn_msgs:
                 if msg["level"] == "debug":
                     tg_msgs.append(msg["msg"])
-            message = "\n".join(tg_msgs)
-            self.tg_send_msg(message, warn_msgs)
+        print(tg_msgs)
+        self.tg_send_msg(tg_msgs, warn_msgs)

@@ -450,7 +450,7 @@ class NetRule(Rule):
         self.net_pps_critical = net_pps_critical
         self.net_filter = net_filter
         self.interval = net_interval
-        self.net_max_bandwidth = net_max_bandwidth
+        self.net_max_bandwidth = net_max_bandwidth if net_max_bandwidth is not None else 1000
 
         self.count_ifaces = []
 

@@ -64,11 +64,14 @@ class Rule():
         pass
 
     def get_proc_name(self, process: psutil.Process):
+        process_name = "None"
         if self.system != "Windows" and process.cmdline() is not None and len(process.cmdline()) > 0:
-            return " ".join(process.cmdline())
-        if process.name() != "":
-            return process.name()
-        return process.exe()
+            process_name = " ".join(process.cmdline())
+        elif process.name() != "":
+            process_name = process.name()
+        else:
+            process_name = process.exe()
+        return process_name[:min(128, len(process_name))]
 
     def check_admin(self):
         is_root = False

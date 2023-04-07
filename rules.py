@@ -665,10 +665,6 @@ class TempRule(Rule):
                     self.warning(label, f"{temp.current} \
 (>= {self.temp_disk_warn})")
 
-        self.warn_cpu = True
-        self.warn_disk = True
-        self.warning("test", "test")
-
     def get_top_proc(self):
         if self.warn_cpu:
             cpu_rule = CPURule(name=self.name+"-cpu", debug=self.debug)

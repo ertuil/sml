@@ -1,8 +1,9 @@
 import platform
 import traceback
+import threading
 from config import host, debug, mail_from, tg_server, interval, tg_botid
 from rules import CPURule, MemRule, FSRule, NetRule, ListenRule, TempRule,\
-      ConnRule, DiskRule, DockerRule
+      ConnRule, DiskRule, DockerRule, Rule
 from notify import LogNotifier, MailNotifier, TgNotifier
 from utils import get_current_time
 
@@ -20,22 +21,40 @@ def fire():
     ]
 
     if platform.system() == "Linux":
-        all_rules.append(TempRule("temperature", debug))
+        all_rules.append(TempRule("temp", debug))
 
     if len(all_rules) > 0 and not all_rules[0].is_root:
         print("Warning: sml is not running in the root(admin) mode")
 
     all_warning = []
     all_states = {}
+
+    threads = []
+
+    class ruleThread (threading.Thread):
+        def __init__(self, rule: Rule, current_time: str):
+            threading.Thread.__init__(self)
+            self.rule = rule
+            self.name = self.rule.name
+            self.current_time = current_time
+
+        def run(self):
+            try:
+                states, warn = self.rule.run(current_time)
+                all_warning.extend(warn)
+                all_states[self.rule.name] = states
+            except Exception as e:
+                traceback.print_exc()
+                all_warning.insert(0, f"[{self.rule.name}] critical: {e}")
+
     current_time = get_current_time()
     for r in all_rules:
-        try:
-            states, warn = r.run(current_time)
-            all_warning.extend(warn)
-            all_states[r.name] = states
-        except Exception as e:
-            traceback.print_exc()
-            all_warning.insert(0, f"[{r.name}] critical: {e}")
+        rule_t = ruleThread(r, current_time)
+        threads.append(rule_t)
+        rule_t.start()
+
+    for t in threads:
+        t.join()
 
     return current_time, all_warning, all_states
 

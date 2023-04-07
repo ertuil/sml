@@ -6,7 +6,7 @@ interval = 0                    # collect information periodically (in seconds)
 # ===== monitor settings =====
 cpu_load_warn = 0.72            # warning CPU load, >= 72%
 cpu_load_critical = 0.90        # critical CPU load, >= 90%
-cpu_interval = 5                # measure CPU load within 5 second(s)
+cpu_interval = 30                # measure CPU load within 5 second(s)
 
 mem_load_warn = 0.72            # warning memory usage, >= 72%
 mem_load_critical = 0.90        # critical memory usage, >= 90%
@@ -24,7 +24,7 @@ disk_iops_critical = 1800       # critical disk iops, >= 1800 iops
 disk_usage_warn = 0.55          # warning disk busy time, >= 56%
 disk_usage_critical = 0.70      # critical disk busy time, >= 70%
 disk_filter = None              # collect information on selected disk, e.g., fs_filter = ["/dev/sda"]
-disk_interval = 5               # collect network information within 5 second(s)
+disk_interval = 30               # collect network information within 5 second(s)
 
 net_conn_warn = 5000            # warning number of net connections, >= 5000
 net_conn_critical = 10000       # critical number of net connections, >= 10000
@@ -34,7 +34,7 @@ net_io_critical = 0.9           # critical network rate, >= 90% max bandwidth
 net_pps_warn = 60000            # warning network send rate, >= 60000 pps
 net_pps_critical = 80000        # critical network send rate, >= 80000 pps
 net_filter = None               # collect information only on selected nic(s), e.g., net_filter = ["lo", "eth0"]
-net_interval = 5                # collect network information within 5 second(s)
+net_interval = 30                # collect network information within 5 second(s)
 net_max_bandwidth = 1000        # network max bandwidth, 1000 Mbps
 
 temp_cpu_warn = 70              # warning CPU temperature, >= 70 Celsius

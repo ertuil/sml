@@ -479,7 +479,10 @@ class NetRule(Rule):
                     if if_stat.duplex == psutil.NIC_DUPLEX_HALF:
                         mul = 0.5
                     speed = if_stat.speed
-                    if speed == 0 or speed > self.net_max_bandwidth:
+                    if "lo" in iface or "Loopback" in iface:
+                        # 100 GBps for lookback device
+                        speed = 100000
+                    elif speed == 0 or speed > self.net_max_bandwidth:
                         # support default is 1 GBps
                         speed = self.net_max_bandwidth * self.mbps_multipler * mul
                     else:
@@ -610,7 +613,7 @@ class ConnRule(Rule):
 
 
 class TempRule(Rule):
-    def __init__(self, name: str = "temperature", debug: bool = False):
+    def __init__(self, name: str = "temp", debug: bool = False):
         super().__init__(name, debug)
         self.temp_cpu_warn = temp_cpu_warn
         self.temp_disk_warn = temp_disk_warn
@@ -618,6 +621,8 @@ class TempRule(Rule):
         self.temp_cpu_critical = temp_cpu_critical if temp_cpu_critical is not None else 105
         self.temp_disk_critical = temp_disk_critical if temp_disk_critical is not None else 100
         self.temp_critical_percent = temp_critical_percent if temp_critical_percent is not None else 1
+        self.warn_cpu = False
+        self.warn_disk = False
 
     def stat(self):
         temp_stat = {}
@@ -626,11 +631,12 @@ class TempRule(Rule):
         for key, temps in temp_results.items():
             for t in temps:
                 temp_stat[f"{key}-{t.label}"] = t
-                t.critical
 
         return temp_stat
 
     def check(self, stat):
+        self.warn_cpu = False
+        self.warn_disk = False
         for label, temp in stat.items():
             if temp.critical is not None:
                 if self.temp_critical_percent is not None and\
@@ -643,17 +649,38 @@ class TempRule(Rule):
 
             if "coretemp" in label or "cpu" in label or "Package id" in label or "Core" in label:
                 if self.temp_cpu_critical is not None and temp.current >= self.temp_cpu_critical:
+                    self.warn_cpu = True
                     self.critical(label, f"{temp.current} (>= {self.temp_cpu_critical})")
                 elif temp.current >= self.temp_cpu_warn:
+                    self.warn_cpu = True
                     self.warning(label, f"{temp.current} (>= {self.temp_cpu_warn})")
 
-            if "nvmi" in label or "hdd" in label or "disk" in label:
+            if "nvme" in label or "hdd" in label or "disk" in label:
                 if self.temp_disk_critical is not None and temp.current >= self.temp_disk_critical:
+                    self.warn_disk = True
                     self.critical(label, f"{temp.current} \
 (>= {self.temp_disk_critical})")
                 elif temp.current >= self.temp_disk_warn:
+                    self.warn_disk = True
                     self.warning(label, f"{temp.current} \
 (>= {self.temp_disk_warn})")
+
+        self.warn_cpu = True
+        self.warn_disk = True
+        self.warning("test", "test")
+
+    def get_top_proc(self):
+        if self.warn_cpu:
+            cpu_rule = CPURule(name=self.name+"-cpu", debug=self.debug)
+            cpu_rule.get_top_proc()
+            for msg in cpu_rule.msgs:
+                self.msgs.append(msg)
+        if self.warn_disk:
+            disk_rule = DiskRule(name=self.name+"-disk", debug=self.debug)
+            disk_rule.warn_bytes = True
+            disk_rule.get_top_proc()
+            for msg in disk_rule.msgs:
+                self.msgs.append(msg)
 
 
 class ListenRule(Rule):

@@ -623,14 +623,41 @@ class TempRule(Rule):
         self.temp_critical_percent = temp_critical_percent if temp_critical_percent is not None else 1
         self.warn_cpu = False
         self.warn_disk = False
+        self.temp_interval = cpu_interval
 
     def stat(self):
         temp_stat = {}
-        temp_results = psutil.sensors_temperatures()
+        self.device.clear()
 
+        temp_list = {}
+        temp_results = psutil.sensors_temperatures()
         for key, temps in temp_results.items():
             for t in temps:
-                temp_stat[f"{key}-{t.label}"] = t
+                name = f"{key}-{t.label}"
+                temp_list[name] = [t.current]
+                temp_stat[name] = {}
+                if t.high is not None:
+                    temp_stat[name]["critical"] = t.high
+                else:
+                    temp_stat[name]["critical"] = t.critical
+
+        i = 1
+        while isinstance(self.temp_interval, int) and i <= self.temp_interval:
+            temp_results = psutil.sensors_temperatures()
+            for key, temps in temp_results.items():
+                for t in temps:
+                    name = f"{key}-{t.label}"
+                    if name in temp_list:
+                        temp_list[name].append(t.current)
+            i += 1
+
+        for name, temp_list in temp_list.items():
+            if name not in temp_stat:
+                continue
+            if len(temp_list[name]) > 0:
+                temp_stat[name]["current"] = sum(temp_list[name])/len(temp_list[name])
+            else:
+                del temp_stat[name]
 
         return temp_stat
 
@@ -638,31 +665,31 @@ class TempRule(Rule):
         self.warn_cpu = False
         self.warn_disk = False
         for label, temp in stat.items():
-            if temp.critical is not None:
+            if temp['critical'] is not None:
                 if self.temp_critical_percent is not None and\
-                   temp.current >= temp.critical * self.temp_critical_percent:
-                    self.critical(label, f"{temp.current} \
-(>= {temp.critical * self.temp_critical_percent}, crit. temp.: {temp.critical})")
-                elif temp.current >= temp.critical * self.temp_warn_percent:
-                    self.warning(label, f"{temp.current} \
-(>= {temp.critical * self.temp_warn_percent}, crit. temp.: {temp.critical})")
+                   temp['current'] >= temp['critical'] * self.temp_critical_percent:
+                    self.critical(label, f"{temp['current']} \
+(>= {temp['critical'] * self.temp_critical_percent}, crit. temp.: {temp['critical']})")
+                elif temp['current'] >= temp['critical'] * self.temp_warn_percent:
+                    self.warning(label, f"{temp['current']} \
+(>= {temp['critical'] * self.temp_warn_percent}, crit. temp.: {temp['critical']})")
 
             if "coretemp" in label or "cpu" in label or "Package id" in label or "Core" in label:
-                if self.temp_cpu_critical is not None and temp.current >= self.temp_cpu_critical:
+                if self.temp_cpu_critical is not None and temp['current'] >= self.temp_cpu_critical:
                     self.warn_cpu = True
-                    self.critical(label, f"{temp.current} (>= {self.temp_cpu_critical})")
-                elif temp.current >= self.temp_cpu_warn:
+                    self.critical(label, f"{temp['current']} (>= {self.temp_cpu_critical})")
+                elif temp['current'] >= self.temp_cpu_warn:
                     self.warn_cpu = True
-                    self.warning(label, f"{temp.current} (>= {self.temp_cpu_warn})")
+                    self.warning(label, f"{temp['current']} (>= {self.temp_cpu_warn})")
 
             if "nvme" in label or "hdd" in label or "disk" in label:
-                if self.temp_disk_critical is not None and temp.current >= self.temp_disk_critical:
+                if self.temp_disk_critical is not None and temp['current'] >= self.temp_disk_critical:
                     self.warn_disk = True
-                    self.critical(label, f"{temp.current} \
+                    self.critical(label, f"{temp['current']} \
 (>= {self.temp_disk_critical})")
-                elif temp.current >= self.temp_disk_warn:
+                elif temp['current'] >= self.temp_disk_warn:
                     self.warn_disk = True
-                    self.warning(label, f"{temp.current} \
+                    self.warning(label, f"{temp['current']} \
 (>= {self.temp_disk_warn})")
 
     def get_top_proc(self):

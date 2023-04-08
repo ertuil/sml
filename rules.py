@@ -644,7 +644,7 @@ class TempRule(Rule):
             temp_results = psutil.sensors_temperatures()
             for key, temps in temp_results.items():
                 for t in temps:
-                    if t < -100:
+                    if t.current < -100:
                         continue
                     name = f"{key}-{t.label}"
                     if name in temp_list:

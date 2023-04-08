@@ -627,8 +627,6 @@ class TempRule(Rule):
 
     def stat(self):
         temp_stat = {}
-        self.device.clear()
-
         temp_list = {}
         temp_results = psutil.sensors_temperatures()
         for key, temps in temp_results.items():

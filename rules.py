@@ -644,9 +644,10 @@ class TempRule(Rule):
             temp_results = psutil.sensors_temperatures()
             for key, temps in temp_results.items():
                 for t in temps:
+                    if t < -100:
+                        continue
                     name = f"{key}-{t.label}"
                     if name in temp_list:
-                        print(name, t.current)
                         temp_list[name].append(t.current)
             time.sleep(1)
             i += 1
@@ -658,7 +659,6 @@ class TempRule(Rule):
                 temp_stat[name]["current"] = sum(temps)/len(temps)
             else:
                 del temp_stat[name]
-
         return temp_stat
 
     def check(self, stat):

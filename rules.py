@@ -649,11 +649,11 @@ class TempRule(Rule):
                         temp_list[name].append(t.current)
             i += 1
 
-        for name, temp_list in temp_list.items():
+        for name, temps in temp_list.items():
             if name not in temp_stat:
                 continue
-            if len(temp_list[name]) > 0:
-                temp_stat[name]["current"] = sum(temp_list[name])/len(temp_list[name])
+            if len(temps) > 0:
+                temp_stat[name]["current"] = sum(temps)/len(temps)
             else:
                 del temp_stat[name]
 

@@ -481,7 +481,7 @@ class NetRule(Rule):
                     speed = if_stat.speed
                     if "lo" in iface or "Loopback" in iface:
                         # 100 GBps for lookback device
-                        speed = 100000
+                        speed = 100000 * self.mbps_multipler
                     elif speed == 0 or speed > self.net_max_bandwidth:
                         # support default is 1 GBps
                         speed = self.net_max_bandwidth * self.mbps_multipler * mul

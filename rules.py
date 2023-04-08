@@ -646,7 +646,9 @@ class TempRule(Rule):
                 for t in temps:
                     name = f"{key}-{t.label}"
                     if name in temp_list:
+                        print(name, t.current)
                         temp_list[name].append(t.current)
+            time.sleep(1)
             i += 1
 
         for name, temps in temp_list.items():

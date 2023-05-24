@@ -199,7 +199,8 @@ class TgNotifier(Notifier):
     def _tg_send_core(self, msg, warn_msgs):
         try:
             if self.relay:
-                requests.post(self.tg_server, data={"secret": self.tg_secret, "message": msg})\
+                header = {"Content-Type": "application/json", "Authorization": f"Bearer {self.tg_secret}"}
+                requests.post(self.tg_server, json={"msg": msg}, headers=header)\
                     .raise_for_status()
             else:
                 url = "https://api.telegram.org/bot" + tg_botid + "/sendMessage"
